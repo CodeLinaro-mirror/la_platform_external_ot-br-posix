@@ -39,14 +39,18 @@ import android.os.IBinder.DeathRecipient;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 
+import com.android.server.thread.openthread.BackboneRouterState;
 import com.android.server.thread.openthread.BorderRouterConfigurationParcel;
+import com.android.server.thread.openthread.IChannelMasksReceiver;
 import com.android.server.thread.openthread.INsdPublisher;
 import com.android.server.thread.openthread.IOtDaemon;
 import com.android.server.thread.openthread.IOtDaemonCallback;
 import com.android.server.thread.openthread.IOtStatusReceiver;
+import com.android.server.thread.openthread.MeshcopTxtAttributes;
 import com.android.server.thread.openthread.OtDaemonState;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.NoSuchElementException;
 
 /** A fake implementation of the {@link IOtDaemon} AIDL API for testing. */
@@ -59,33 +63,47 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     static final int OT_DEVICE_ROLE_CHILD = 2;
     static final int OT_DEVICE_ROLE_ROUTER = 3;
     static final int OT_DEVICE_ROLE_LEADER = 4;
+    static final int OT_ERROR_NONE = 0;
 
     private static final long PROACTIVE_LISTENER_ID = -1;
 
     private final Handler mHandler;
-    private final OtDaemonState mState;
-    private int mThreadEnabled = OT_STATE_ENABLED;
+    private OtDaemonState mState;
+    private BackboneRouterState mBbrState;
+    private boolean mIsInitialized = false;
+    private int mThreadEnabled = OT_STATE_DISABLED;
+    private int mChannelMasksReceiverOtError = OT_ERROR_NONE;
+    private int mSupportedChannelMask = 0x07FFF800; // from channel 11 to 26
+    private int mPreferredChannelMask = 0;
 
     @Nullable private DeathRecipient mDeathRecipient;
-
     @Nullable private ParcelFileDescriptor mTunFd;
-
-    @NonNull private INsdPublisher mNsdPublisher;
-
+    @Nullable private INsdPublisher mNsdPublisher;
+    @Nullable private MeshcopTxtAttributes mOverriddenMeshcopTxts;
     @Nullable private IOtDaemonCallback mCallback;
-
     @Nullable private Long mCallbackListenerId;
-
     @Nullable private RemoteException mJoinException;
 
     public FakeOtDaemon(Handler handler) {
         mHandler = handler;
+        resetStates();
+    }
+
+    private void resetStates() {
         mState = new OtDaemonState();
         mState.isInterfaceUp = false;
+        mState.partitionId = -1;
         mState.deviceRole = OT_DEVICE_ROLE_DISABLED;
         mState.activeDatasetTlvs = new byte[0];
         mState.pendingDatasetTlvs = new byte[0];
-        mState.multicastForwardingEnabled = false;
+        mBbrState = new BackboneRouterState();
+        mBbrState.multicastForwardingEnabled = false;
+        mBbrState.listeningAddresses = new ArrayList<>();
+
+        mTunFd = null;
+        mThreadEnabled = OT_STATE_DISABLED;
+        mNsdPublisher = null;
+        mIsInitialized = false;
     }
 
     @Override
@@ -112,29 +130,53 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
         return true;
     }
 
-    @Override
-    public void initialize(ParcelFileDescriptor tunFd, boolean enabled, INsdPublisher nsdPublisher)
-            throws RemoteException {
-        mTunFd = tunFd;
-        mThreadEnabled = enabled ? OT_STATE_ENABLED : OT_STATE_DISABLED;
-        mNsdPublisher = nsdPublisher;
+    @Nullable
+    public DeathRecipient getDeathRecipient() {
+        return mDeathRecipient;
     }
 
     @Override
-    public void setThreadEnabled(boolean enabled, IOtStatusReceiver receiver) {
-        mHandler.post(
-                () -> {
-                    mThreadEnabled = enabled ? OT_STATE_ENABLED : OT_STATE_DISABLED;
-                    try {
-                        receiver.onSuccess();
-                    } catch (RemoteException e) {
-                        throw new AssertionError(e);
-                    }
-                });
+    public void initialize(
+            ParcelFileDescriptor tunFd,
+            boolean enabled,
+            INsdPublisher nsdPublisher,
+            MeshcopTxtAttributes overriddenMeshcopTxts)
+            throws RemoteException {
+        mIsInitialized = true;
+        mTunFd = tunFd;
+        mThreadEnabled = enabled ? OT_STATE_ENABLED : OT_STATE_DISABLED;
+        mNsdPublisher = nsdPublisher;
+
+        mOverriddenMeshcopTxts = new MeshcopTxtAttributes();
+        mOverriddenMeshcopTxts.vendorOui = overriddenMeshcopTxts.vendorOui.clone();
+        mOverriddenMeshcopTxts.vendorName = overriddenMeshcopTxts.vendorName;
+        mOverriddenMeshcopTxts.modelName = overriddenMeshcopTxts.modelName;
+    }
+
+    /** Returns {@code true} if {@link initialize} has been called to initialize this object. */
+    public boolean isInitialized() {
+        return mIsInitialized;
+    }
+
+    @Override
+    public void terminate() throws RemoteException {
+        resetStates();
+        if (mDeathRecipient != null) {
+            mDeathRecipient.binderDied();
+            mDeathRecipient = null;
+        }
     }
 
     public int getEnabledState() {
         return mThreadEnabled;
+    }
+
+    public OtDaemonState getState() {
+        return makeCopy(mState);
+    }
+
+    public BackboneRouterState getBackboneRouterState() {
+        return makeCopy(mBbrState);
     }
 
     /**
@@ -155,6 +197,28 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
         return mNsdPublisher;
     }
 
+    /**
+     * Returns the overridden MeshCoP TXT attributes that is to OT daemon or {@code null} if {@link
+     * #initialize} is never called.
+     */
+    @Nullable
+    public MeshcopTxtAttributes getOverriddenMeshcopTxtAttributes() {
+        return mOverriddenMeshcopTxts;
+    }
+
+    @Override
+    public void setThreadEnabled(boolean enabled, IOtStatusReceiver receiver) {
+        mHandler.post(
+                () -> {
+                    mThreadEnabled = enabled ? OT_STATE_ENABLED : OT_STATE_DISABLED;
+                    try {
+                        receiver.onSuccess();
+                    } catch (RemoteException e) {
+                        throw new AssertionError(e);
+                    }
+                });
+    }
+
     @Override
     public void registerStateCallback(IOtDaemonCallback callback, long listenerId)
             throws RemoteException {
@@ -162,6 +226,7 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
         mCallbackListenerId = listenerId;
 
         mHandler.post(() -> onStateChanged(mState, mCallbackListenerId));
+        mHandler.post(() -> onBackboneRouterStateChanged(mBbrState));
     }
 
     @Nullable
@@ -186,9 +251,10 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
                 () -> {
                     mState.deviceRole = OT_DEVICE_ROLE_LEADER;
                     mState.activeDatasetTlvs = activeDataset.clone();
-                    mState.multicastForwardingEnabled = true;
+                    mBbrState.multicastForwardingEnabled = true;
 
                     onStateChanged(mState, PROACTIVE_LISTENER_ID);
+                    onBackboneRouterStateChanged(mBbrState);
                     try {
                         receiver.onSuccess();
                     } catch (RemoteException e) {
@@ -198,18 +264,40 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
                 JOIN_DELAY.toMillis());
     }
 
+    private OtDaemonState makeCopy(OtDaemonState state) {
+        OtDaemonState copyState = new OtDaemonState();
+        copyState.isInterfaceUp = state.isInterfaceUp;
+        copyState.deviceRole = state.deviceRole;
+        copyState.partitionId = state.partitionId;
+        copyState.activeDatasetTlvs = state.activeDatasetTlvs.clone();
+        copyState.pendingDatasetTlvs = state.pendingDatasetTlvs.clone();
+        return copyState;
+    }
+
+    private BackboneRouterState makeCopy(BackboneRouterState state) {
+        BackboneRouterState copyState = new BackboneRouterState();
+        copyState.multicastForwardingEnabled = state.multicastForwardingEnabled;
+        copyState.listeningAddresses = new ArrayList<>(state.listeningAddresses);
+        return copyState;
+    }
+
     private void onStateChanged(OtDaemonState state, long listenerId) {
         try {
-            // Make a copy of mState so that clients won't keep a direct reference to it
-            OtDaemonState copyState = new OtDaemonState();
-            copyState.isInterfaceUp = state.isInterfaceUp;
-            copyState.deviceRole = state.deviceRole;
-            copyState.partitionId = state.partitionId;
-            copyState.activeDatasetTlvs = state.activeDatasetTlvs.clone();
-            copyState.pendingDatasetTlvs = state.pendingDatasetTlvs.clone();
-            copyState.multicastForwardingEnabled = state.multicastForwardingEnabled;
+            // Make a copy of state so that clients won't keep a direct reference to it
+            OtDaemonState copyState = makeCopy(state);
 
             mCallback.onStateChanged(copyState, listenerId);
+        } catch (RemoteException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    private void onBackboneRouterStateChanged(BackboneRouterState state) {
+        try {
+            // Make a copy of state so that clients won't keep a direct reference to it
+            BackboneRouterState copyState = makeCopy(state);
+
+            mCallback.onBackboneRouterStateChanged(copyState);
         } catch (RemoteException e) {
             throw new AssertionError(e);
         }
@@ -243,7 +331,32 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     @Override
     public void setCountryCode(String countryCode, IOtStatusReceiver receiver)
             throws RemoteException {
-        throw new UnsupportedOperationException(
-                "FakeOtDaemon#scheduleMigration is not implemented!");
+        throw new UnsupportedOperationException("FakeOtDaemon#setCountryCode is not implemented!");
+    }
+
+    @Override
+    public void getChannelMasks(IChannelMasksReceiver receiver) throws RemoteException {
+        mHandler.post(
+                () -> {
+                    try {
+                        if (mChannelMasksReceiverOtError == OT_ERROR_NONE) {
+                            receiver.onSuccess(mSupportedChannelMask, mPreferredChannelMask);
+                        } else {
+                            receiver.onError(
+                                    mChannelMasksReceiverOtError, "Get channel masks failed");
+                        }
+                    } catch (RemoteException e) {
+                        throw new AssertionError(e);
+                    }
+                });
+    }
+
+    public void setChannelMasks(int supportedChannelMask, int preferredChannelMask) {
+        mSupportedChannelMask = supportedChannelMask;
+        mPreferredChannelMask = preferredChannelMask;
+    }
+
+    public void setChannelMasksReceiverOtError(int otError) {
+        mChannelMasksReceiverOtError = otError;
     }
 }

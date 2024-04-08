@@ -52,17 +52,19 @@ public:
 
     ~MdnsPublisher(void) { Stop(); }
 
-    // In this Publisher implementation, SetINsdPublisher() does the job to start/stop the Publisher. That's because we
-    // want to ensure ot-daemon won't do any mDNS operations when Thread is disabled.
+    /** Sets the INsdPublisher which forwards the mDNS API requests to the NsdManager in system_server. */
     void SetINsdPublisher(std::shared_ptr<INsdPublisher> aINsdPublisher);
 
-    otbrError Start(void) override { return OTBR_ERROR_MDNS; }
+    otbrError Start(void) override { return OTBR_ERROR_NONE; }
 
     void Stop(void) override
     {
         mServiceRegistrations.clear();
         mHostRegistrations.clear();
-        mStateCallback(Mdns::Publisher::State::kIdle);
+        if (mNsdPublisher != nullptr)
+        {
+            mNsdPublisher->reset();
+        }
     }
 
     bool IsStarted(void) const override { return mNsdPublisher != nullptr; }
@@ -70,6 +72,8 @@ public:
     void UnpublishService(const std::string &aName, const std::string &aType, ResultCallback &&aCallback) override;
 
     void UnpublishHost(const std::string &aName, ResultCallback &&aCallback) override;
+
+    void UnpublishKey(const std::string &aName, ResultCallback &&aCallback) override;
 
     void SubscribeService(const std::string &aType, const std::string &aInstanceName) override;
 
@@ -106,6 +110,8 @@ protected:
 
     otbrError PublishHostImpl(const std::string &aName, const AddressList &aAddresses, ResultCallback &&aCallback);
 
+    otbrError PublishKeyImpl(const std::string &aName, const KeyData &aKeyData, ResultCallback &&aCallback) override;
+
     void OnServiceResolveFailedImpl(const std::string &aType, const std::string &aInstanceName, int32_t aErrorCode);
 
     void OnHostResolveFailedImpl(const std::string &aHostName, int32_t aErrorCode);
@@ -116,16 +122,16 @@ private:
     class NsdServiceRegistration : public ServiceRegistration
     {
     public:
-        NsdServiceRegistration(const std::string             &aHostName,
-                               const std::string             &aName,
-                               const std::string             &aType,
-                               const SubTypeList             &aSubTypeList,
-                               uint16_t                       aPort,
-                               const TxtData                 &aTxtData,
-                               ResultCallback               &&aCallback,
-                               MdnsPublisher                 *aPublisher,
-                               int32_t                        aListenerId,
-                               std::shared_ptr<INsdPublisher> aINsdPublisher)
+        NsdServiceRegistration(const std::string           &aHostName,
+                               const std::string           &aName,
+                               const std::string           &aType,
+                               const SubTypeList           &aSubTypeList,
+                               uint16_t                     aPort,
+                               const TxtData               &aTxtData,
+                               ResultCallback             &&aCallback,
+                               MdnsPublisher               *aPublisher,
+                               int32_t                      aListenerId,
+                               std::weak_ptr<INsdPublisher> aINsdPublisher)
             : ServiceRegistration(aHostName,
                                   aName,
                                   aType,
@@ -146,7 +152,31 @@ private:
         std::shared_ptr<NsdStatusReceiver> mUnregisterReceiver;
 
     private:
-        std::shared_ptr<INsdPublisher> mNsdPublisher;
+        std::weak_ptr<INsdPublisher> mNsdPublisher;
+    };
+
+    class NsdHostRegistration : public HostRegistration
+    {
+    public:
+        NsdHostRegistration(const std::string           &aName,
+                            const AddressList           &aAddresses,
+                            ResultCallback             &&aCallback,
+                            MdnsPublisher               *aPublisher,
+                            int32_t                      aListenerId,
+                            std::weak_ptr<INsdPublisher> aINsdPublisher)
+            : HostRegistration(aName, aAddresses, std::move(aCallback), aPublisher)
+            , mListenerId(aListenerId)
+            , mNsdPublisher(aINsdPublisher)
+        {
+        }
+
+        ~NsdHostRegistration(void) override;
+
+        const int32_t                      mListenerId;
+        std::shared_ptr<NsdStatusReceiver> mUnregisterReceiver;
+
+    private:
+        std::weak_ptr<INsdPublisher> mNsdPublisher;
     };
 
     int32_t AllocateListenerId(void);

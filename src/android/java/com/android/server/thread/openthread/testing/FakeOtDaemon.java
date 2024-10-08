@@ -28,6 +28,8 @@
 
 package com.android.server.thread.openthread.testing;
 
+import static com.android.server.thread.openthread.IOtDaemon.OT_EPHEMERAL_KEY_DISABLED;
+import static com.android.server.thread.openthread.IOtDaemon.OT_EPHEMERAL_KEY_ENABLED;
 import static com.android.server.thread.openthread.IOtDaemon.OT_STATE_DISABLED;
 import static com.android.server.thread.openthread.IOtDaemon.OT_STATE_ENABLED;
 
@@ -45,13 +47,14 @@ import com.android.server.thread.openthread.IChannelMasksReceiver;
 import com.android.server.thread.openthread.INsdPublisher;
 import com.android.server.thread.openthread.IOtDaemon;
 import com.android.server.thread.openthread.IOtDaemonCallback;
+import com.android.server.thread.openthread.IOtOutputReceiver;
 import com.android.server.thread.openthread.IOtStatusReceiver;
-import com.android.server.thread.openthread.InfraLinkState;
 import com.android.server.thread.openthread.MeshcopTxtAttributes;
 import com.android.server.thread.openthread.OtDaemonConfiguration;
 import com.android.server.thread.openthread.OtDaemonState;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -85,6 +88,7 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     @Nullable private IOtDaemonCallback mCallback;
     @Nullable private Long mCallbackListenerId;
     @Nullable private RemoteException mJoinException;
+    @Nullable private RemoteException mRunOtCtlCommandException;
     @Nullable private String mCountryCode;
 
     public FakeOtDaemon(Handler handler) {
@@ -100,6 +104,9 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
         mState.activeDatasetTlvs = new byte[0];
         mState.pendingDatasetTlvs = new byte[0];
         mState.threadEnabled = OT_STATE_DISABLED;
+        mState.ephemeralKeyState = OT_EPHEMERAL_KEY_DISABLED;
+        mState.ephemeralKeyPasscode = "";
+        mState.ephemeralKeyExpiryMillis = 0;
         mBbrState = new BackboneRouterState();
         mBbrState.multicastForwardingEnabled = false;
         mBbrState.listeningAddresses = new ArrayList<>();
@@ -294,6 +301,36 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
                 JOIN_DELAY.toMillis());
     }
 
+    @Override
+    public void activateEphemeralKeyMode(long lifetimeMillis, IOtStatusReceiver receiver) {
+        mHandler.post(
+                () -> {
+                    mState.ephemeralKeyState = OT_EPHEMERAL_KEY_ENABLED;
+                    mState.ephemeralKeyPasscode = "123456789";
+                    mState.ephemeralKeyExpiryMillis = Instant.now().toEpochMilli() + lifetimeMillis;
+                    try {
+                        receiver.onSuccess();
+                    } catch (RemoteException e) {
+                        throw new AssertionError(e);
+                    }
+                });
+    }
+
+    @Override
+    public void deactivateEphemeralKeyMode(IOtStatusReceiver receiver) {
+        mHandler.post(
+                () -> {
+                    mState.ephemeralKeyState = OT_EPHEMERAL_KEY_DISABLED;
+                    mState.ephemeralKeyPasscode = "";
+                    mState.ephemeralKeyExpiryMillis = 0;
+                    try {
+                        receiver.onSuccess();
+                    } catch (RemoteException e) {
+                        throw new AssertionError(e);
+                    }
+                });
+    }
+
     private OtDaemonState makeCopy(OtDaemonState state) {
         OtDaemonState copyState = new OtDaemonState();
         copyState.isInterfaceUp = state.isInterfaceUp;
@@ -351,11 +388,18 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     }
 
     @Override
-    public void setInfraLinkState(
-            InfraLinkState infraLinkState, ParcelFileDescriptor fd, IOtStatusReceiver receiver)
+    public void setInfraLinkInterfaceName(
+            String interfaceName, ParcelFileDescriptor fd, IOtStatusReceiver receiver)
             throws RemoteException {
         throw new UnsupportedOperationException(
-                "FakeOtDaemon#setInfraLinkState is not implemented!");
+                "FakeOtDaemon#setInfraLinkInterfaceName is not implemented!");
+    }
+
+    @Override
+    public void setInfraLinkNat64Prefix(String nat64Prefix, IOtStatusReceiver receiver)
+            throws RemoteException {
+        throw new UnsupportedOperationException(
+                "FakeOtDaemon#setInfraLinkNat64Prefix is not implemented!");
     }
 
     @Override
@@ -402,5 +446,36 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
             throws RemoteException {
         throw new UnsupportedOperationException(
                 "FakeOtDaemon#setChannelTargetPowers is not implemented!");
+    }
+
+    @Override
+    public void runOtCtlCommand(String command, boolean isInteractive, IOtOutputReceiver receiver)
+            throws RemoteException {
+        if (mRunOtCtlCommandException != null) {
+            throw mRunOtCtlCommandException;
+        }
+
+        mHandler.post(
+                () -> {
+                    try {
+                        List<String> outputLines = new ArrayList<>();
+                        outputLines.add("leader");
+                        outputLines.add("\r\n");
+                        outputLines.add("Done");
+                        outputLines.add("\r\n");
+
+                        for (String line : outputLines) {
+                            receiver.onOutput(line);
+                        }
+                        receiver.onComplete();
+                    } catch (RemoteException e) {
+                        throw new AssertionError(e);
+                    }
+                });
+    }
+
+    /** Sets the {@link RemoteException} which will be thrown from {@link #runOtCtlCommand}. */
+    public void setRunOtCtlCommandException(RemoteException exception) {
+        mRunOtCtlCommandException = exception;
     }
 }

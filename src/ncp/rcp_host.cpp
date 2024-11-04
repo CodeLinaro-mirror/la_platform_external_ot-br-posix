@@ -452,6 +452,30 @@ exit:
     }
 }
 
+void RcpHost::GetChannelMasks(const ChannelMasksReceiver &aReceiver, const AsyncResultReceiver &aErrReceiver)
+{
+    otError  error = OT_ERROR_NONE;
+    uint32_t supportedChannelMask;
+    uint32_t preferredChannelMask;
+
+    VerifyOrExit(mInstance != nullptr, error = OT_ERROR_INVALID_STATE);
+
+    supportedChannelMask = otLinkGetSupportedChannelMask(mInstance);
+    preferredChannelMask = otPlatRadioGetPreferredChannelMask(mInstance);
+
+exit:
+    if (error == OT_ERROR_NONE)
+    {
+        mTaskRunner.Post([aReceiver, supportedChannelMask, preferredChannelMask](void) {
+            aReceiver(supportedChannelMask, preferredChannelMask);
+        });
+    }
+    else
+    {
+        mTaskRunner.Post([aErrReceiver, error](void) { aErrReceiver(error, "OT is not initialized"); });
+    }
+}
+
 void RcpHost::DisableThreadAfterDetach(void *aContext)
 {
     static_cast<RcpHost *>(aContext)->DisableThreadAfterDetach();
@@ -467,6 +491,26 @@ void RcpHost::DisableThreadAfterDetach(void)
 
 exit:
     SafeInvokeAndClear(mSetThreadEnabledReceiver, error, errorMsg);
+}
+
+void RcpHost::SetCountryCode(const std::string &aCountryCode, const AsyncResultReceiver &aReceiver)
+{
+    static constexpr int kCountryCodeLength = 2;
+    otError              error              = OT_ERROR_NONE;
+    std::string          errorMsg;
+    uint16_t             countryCode;
+
+    VerifyOrExit((aCountryCode.length() == kCountryCodeLength) && isalpha(aCountryCode[0]) && isalpha(aCountryCode[1]),
+                 error = OT_ERROR_INVALID_ARGS, errorMsg = "The country code is invalid");
+
+    otbrLogInfo("Set country code: %c%c", aCountryCode[0], aCountryCode[1]);
+    VerifyOrExit(mInstance != nullptr, error = OT_ERROR_INVALID_STATE, errorMsg = "OT is not initialized");
+
+    countryCode = static_cast<uint16_t>((aCountryCode[0] << 8) | aCountryCode[1]);
+    SuccessOrExit(error = otLinkSetRegion(mInstance, countryCode), errorMsg = "Failed to set the country code");
+
+exit:
+    mTaskRunner.Post([aReceiver, error, errorMsg](void) { aReceiver(error, errorMsg); });
 }
 
 /*

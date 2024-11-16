@@ -26,61 +26,31 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "fake_platform.hpp"
+#include "android/common_utils.hpp"
 
-#include <assert.h>
+#include <memory>
+#include <string>
 
-#include "openthread/openthread-system.h"
+#include <openthread/error.h>
 
-otPlatResetReason        gPlatResetReason = OT_PLAT_RESET_REASON_POWER_ON;
-static ot::FakePlatform *sFakePlatform;
+namespace otbr {
+namespace Android {
 
-const otRadioSpinelMetrics *otSysGetRadioSpinelMetrics(void)
+void PropagateResult(int aError, const std::string &aMessage, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
-    return nullptr;
-}
-const otRcpInterfaceMetrics *otSysGetRcpInterfaceMetrics(void)
-{
-    return nullptr;
-}
-
-uint32_t otSysGetInfraNetifFlags(void)
-{
-    return 0;
-}
-
-void otSysCountInfraNetifAddresses(otSysInfraNetIfAddressCounters *)
-{
-}
-
-const char *otSysGetInfraNetifName(void)
-{
-    return nullptr;
-}
-
-otInstance *otSysInit(otPlatformConfig *aPlatformConfig)
-{
-    OT_UNUSED_VARIABLE(aPlatformConfig);
-
-    assert(sFakePlatform == nullptr);
-    sFakePlatform = new ot::FakePlatform();
-    return sFakePlatform->CurrentInstance();
-}
-
-void otSysDeinit(void)
-{
-    if (sFakePlatform != nullptr)
+    if (aReceiver != nullptr)
     {
-        delete sFakePlatform;
-        sFakePlatform = nullptr;
+        // If an operation has already been requested or accepted, consider it succeeded
+        if (aError == OT_ERROR_NONE || aError == OT_ERROR_ALREADY)
+        {
+            aReceiver->onSuccess();
+        }
+        else
+        {
+            aReceiver->onError(aError, aMessage);
+        }
     }
 }
 
-void otSysMainloopUpdate(otInstance *, otSysMainloopContext *)
-{
-}
-
-void otSysMainloopProcess(otInstance *, const otSysMainloopContext *)
-{
-    sFakePlatform->Run(/* microseconds */ 1000);
-}
+} // namespace Android
+} // namespace otbr

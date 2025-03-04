@@ -49,18 +49,11 @@ namespace otbr {
 class Netif
 {
 public:
-    class Dependencies
-    {
-    public:
-        virtual ~Dependencies(void) = default;
+    using Ip6SendFunc = std::function<otbrError(const uint8_t *, uint16_t)>;
 
-        virtual otbrError Ip6Send(const uint8_t *aData, uint16_t aLength);
-        virtual otbrError Ip6MulAddrUpdateSubscription(const otIp6Address &aAddress, bool aIsAdded);
-    };
+    Netif(void);
 
-    Netif(Dependencies &aDependencies);
-
-    otbrError Init(const std::string &aInterfaceName);
+    otbrError Init(const std::string &aInterfaceName, const Ip6SendFunc &aIp6SendFunc);
     void      Deinit(void);
 
     void      Process(const MainloopContext *aContext);
@@ -79,19 +72,16 @@ private:
 
     otbrError CreateTunDevice(const std::string &aInterfaceName);
     otbrError InitNetlink(void);
-    otbrError InitMldListener(void);
 
     void      PlatformSpecificInit(void);
     void      SetAddrGenModeToNone(void);
     void      ProcessUnicastAddressChange(const Ip6AddressInfo &aAddressInfo, bool aIsAdded);
     otbrError ProcessMulticastAddressChange(const Ip6Address &aAddress, bool aIsAdded);
     void      ProcessIp6Send(void);
-    void      ProcessMldEvent(void);
 
     int      mTunFd;           ///< Used to exchange IPv6 packets.
     int      mIpFd;            ///< Used to manage IPv6 stack on the network interface.
     int      mNetlinkFd;       ///< Used to receive netlink events.
-    int      mMldFd;           ///< Used to receive MLD events.
     uint32_t mNetlinkSequence; ///< Netlink message sequence.
 
     unsigned int mNetifIndex;
@@ -99,7 +89,7 @@ private:
 
     std::vector<Ip6AddressInfo> mIp6UnicastAddresses;
     std::vector<Ip6Address>     mIp6MulticastAddresses;
-    Dependencies               &mDeps;
+    Ip6SendFunc                 mIp6SendFunc;
 };
 
 } // namespace otbr

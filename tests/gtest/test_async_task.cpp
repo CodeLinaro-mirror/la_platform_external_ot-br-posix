@@ -34,10 +34,10 @@
 #include <openthread/error.h>
 
 #include "common/code_utils.hpp"
-#include "host/async_task.hpp"
+#include "ncp/async_task.hpp"
 
-using otbr::Host::AsyncTask;
-using otbr::Host::AsyncTaskPtr;
+using otbr::Ncp::AsyncTask;
+using otbr::Ncp::AsyncTaskPtr;
 
 TEST(AsyncTask, TestOneStep)
 {

@@ -110,9 +110,9 @@ void TaskRunner::Update(MainloopContext &aMainloop)
 
 void TaskRunner::Process(const MainloopContext &aMainloop)
 {
-    ssize_t rval;
+    OTBR_UNUSED_VARIABLE(aMainloop);
 
-    VerifyOrExit(FD_ISSET(mEventFd[kRead], &aMainloop.mReadFdSet));
+    ssize_t rval;
 
     // Read any data in the pipe.
     do
@@ -125,7 +125,6 @@ void TaskRunner::Process(const MainloopContext &aMainloop)
     // Critical error happens, simply die.
     VerifyOrDie(errno == EAGAIN || errno == EWOULDBLOCK, strerror(errno));
 
-exit:
     PopTasks();
 }
 

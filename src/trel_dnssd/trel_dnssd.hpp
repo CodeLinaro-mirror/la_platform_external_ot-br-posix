@@ -44,8 +44,8 @@
 #include <openthread/instance.h>
 
 #include "common/types.hpp"
-#include "host/rcp_host.hpp"
 #include "mdns/mdns.hpp"
+#include "ncp/rcp_host.hpp"
 
 namespace otbr {
 
@@ -60,7 +60,7 @@ namespace TrelDnssd {
  * @{
  */
 
-class TrelDnssd : public Mdns::StateObserver
+class TrelDnssd
 {
 public:
     /**
@@ -69,7 +69,7 @@ public:
      * @param[in] aHost       A reference to the OpenThread Controller instance.
      * @param[in] aPublisher  A reference to the mDNS Publisher.
      */
-    explicit TrelDnssd(Host::RcpHost &aHost, Mdns::Publisher &aPublisher);
+    explicit TrelDnssd(Ncp::RcpHost &aHost, Mdns::Publisher &aPublisher);
 
     /**
      * This method initializes the TrelDnssd instance.
@@ -107,7 +107,7 @@ public:
      *
      * @param[in] aState  The state of mDNS publisher.
      */
-    void HandleMdnsState(Mdns::Publisher::State aState) override;
+    void HandleMdnsState(Mdns::Publisher::State aState);
 
 private:
     static constexpr size_t   kPeerCacheSize             = 256;
@@ -170,7 +170,7 @@ private:
     uint16_t CountDuplicatePeers(const Peer &aPeer);
 
     Mdns::Publisher &mPublisher;
-    Host::RcpHost   &mHost;
+    Ncp::RcpHost    &mHost;
     TaskRunner       mTaskRunner;
     std::string      mTrelNetif;
     uint32_t         mTrelNetifIndex = 0;

@@ -44,30 +44,35 @@
 
 namespace otbr {
 
-#ifndef OTBR_MAINLOOP_POLL_TIMEOUT_SEC
-#define OTBR_MAINLOOP_POLL_TIMEOUT_SEC 10
-#endif
-
 std::atomic_bool     Application::sShouldTerminate(false);
-const struct timeval Application::kPollTimeout = {OTBR_MAINLOOP_POLL_TIMEOUT_SEC, 0};
+const struct timeval Application::kPollTimeout = {10, 0};
 
-Application::Application(Host::ThreadHost  &aHost,
-                         const std::string &aInterfaceName,
-                         const std::string &aBackboneInterfaceName,
-                         const std::string &aRestListenAddress,
-                         int                aRestListenPort)
+Application::Application(const std::string               &aInterfaceName,
+                         const std::vector<const char *> &aBackboneInterfaceNames,
+                         const std::vector<const char *> &aRadioUrls,
+                         bool                             aEnableAutoAttach,
+                         const std::string               &aRestListenAddress,
+                         int                              aRestListenPort)
     : mInterfaceName(aInterfaceName)
-    , mBackboneInterfaceName(aBackboneInterfaceName.c_str())
-    , mHost(aHost)
+#if __linux__
+    , mInfraLinkSelector(aBackboneInterfaceNames)
+    , mBackboneInterfaceName(mInfraLinkSelector.Select())
+#else
+    , mBackboneInterfaceName(aBackboneInterfaceNames.empty() ? "" : aBackboneInterfaceNames.front())
+#endif
+    , mHost(Ncp::ThreadHost::Create(mInterfaceName.c_str(),
+                                    aRadioUrls,
+                                    mBackboneInterfaceName,
+                                    /* aDryRun */ false,
+                                    aEnableAutoAttach))
 #if OTBR_ENABLE_MDNS
-    , mPublisher(
-          Mdns::Publisher::Create([this](Mdns::Publisher::State aState) { mMdnsStateSubject.UpdateState(aState); }))
+    , mPublisher(Mdns::Publisher::Create([this](Mdns::Publisher::State aState) { this->HandleMdnsState(aState); }))
 #endif
 #if OTBR_ENABLE_DBUS_SERVER && OTBR_ENABLE_BORDER_AGENT
-    , mDBusAgent(MakeUnique<DBus::DBusAgent>(mHost, *mPublisher))
+    , mDBusAgent(MakeUnique<DBus::DBusAgent>(*mHost, *mPublisher))
 #endif
 {
-    if (mHost.GetCoprocessorType() == OT_COPROCESSOR_RCP)
+    if (mHost->GetCoprocessorType() == OT_COPROCESSOR_RCP)
     {
         CreateRcpMode(aRestListenAddress, aRestListenPort);
     }
@@ -75,9 +80,9 @@ Application::Application(Host::ThreadHost  &aHost,
 
 void Application::Init(void)
 {
-    mHost.Init();
+    mHost->Init();
 
-    switch (mHost.GetCoprocessorType())
+    switch (mHost->GetCoprocessorType())
     {
     case OT_COPROCESSOR_RCP:
         InitRcpMode();
@@ -90,12 +95,12 @@ void Application::Init(void)
         break;
     }
 
-    otbrLogInfo("Co-processor version: %s", mHost.GetCoprocessorVersion());
+    otbrLogInfo("Co-processor version: %s", mHost->GetCoprocessorVersion());
 }
 
 void Application::Deinit(void)
 {
-    switch (mHost.GetCoprocessorType())
+    switch (mHost->GetCoprocessorType())
     {
     case OT_COPROCESSOR_RCP:
         DeinitRcpMode();
@@ -108,12 +113,14 @@ void Application::Deinit(void)
         break;
     }
 
-    mHost.Deinit();
+    mHost->Deinit();
 }
 
 otbrError Application::Run(void)
 {
     otbrError error = OTBR_ERROR_NONE;
+
+    otbrLogInfo("Thread Border Router started on AIL %s.", mBackboneInterfaceName);
 
 #ifdef HAVE_LIBSYSTEMD
     if (getenv("SYSTEMD_EXEC_PID") != nullptr)
@@ -161,14 +168,17 @@ otbrError Application::Run(void)
         {
             MainloopManager::GetInstance().Process(mainloop);
 
-            if (mErrorCondition)
+#if __linux__
             {
-                error = mErrorCondition();
-                if (error != OTBR_ERROR_NONE)
+                const char *newInfraLink = mInfraLinkSelector.Select();
+
+                if (mBackboneInterfaceName != newInfraLink)
                 {
+                    error = OTBR_ERROR_INFRA_LINK_CHANGED;
                     break;
                 }
             }
+#endif
         }
         else if (errno != EINTR)
         {
@@ -181,6 +191,24 @@ otbrError Application::Run(void)
     return error;
 }
 
+void Application::HandleMdnsState(Mdns::Publisher::State aState)
+{
+    OTBR_UNUSED_VARIABLE(aState);
+
+#if OTBR_ENABLE_BORDER_AGENT
+    mBorderAgent->HandleMdnsState(aState);
+#endif
+#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
+    mAdvertisingProxy->HandleMdnsState(aState);
+#endif
+#if OTBR_ENABLE_DNSSD_DISCOVERY_PROXY
+    mDiscoveryProxy->HandleMdnsState(aState);
+#endif
+#if OTBR_ENABLE_TREL
+    mTrelDnssd->HandleMdnsState(aState);
+#endif
+}
+
 void Application::HandleSignal(int aSignal)
 {
     sShouldTerminate = true;
@@ -189,7 +217,7 @@ void Application::HandleSignal(int aSignal)
 
 void Application::CreateRcpMode(const std::string &aRestListenAddress, int aRestListenPort)
 {
-    otbr::Host::RcpHost &rcpHost = static_cast<otbr::Host::RcpHost &>(mHost);
+    otbr::Ncp::RcpHost &rcpHost = static_cast<otbr::Ncp::RcpHost &>(*mHost);
 #if OTBR_ENABLE_BORDER_AGENT
     mBorderAgent = MakeUnique<BorderAgent>(rcpHost, *mPublisher);
 #endif
@@ -221,19 +249,6 @@ void Application::CreateRcpMode(const std::string &aRestListenAddress, int aRest
 
 void Application::InitRcpMode(void)
 {
-#if OTBR_ENABLE_BORDER_AGENT
-    mMdnsStateSubject.AddObserver(*mBorderAgent);
-#endif
-#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
-    mMdnsStateSubject.AddObserver(*mAdvertisingProxy);
-#endif
-#if OTBR_ENABLE_DNSSD_DISCOVERY_PROXY
-    mMdnsStateSubject.AddObserver(*mDiscoveryProxy);
-#endif
-#if OTBR_ENABLE_TREL
-    mMdnsStateSubject.AddObserver(*mTrelDnssd);
-#endif
-
 #if OTBR_ENABLE_MDNS
     mPublisher->Start();
 #endif
@@ -281,19 +296,12 @@ void Application::DeinitRcpMode(void)
     mBorderAgent->SetEnabled(false);
 #endif
 #if OTBR_ENABLE_MDNS
-    mMdnsStateSubject.Clear();
     mPublisher->Stop();
 #endif
 }
 
 void Application::InitNcpMode(void)
 {
-#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
-    otbr::Host::NcpHost &ncpHost = static_cast<otbr::Host::NcpHost &>(mHost);
-    ncpHost.SetMdnsPublisher(mPublisher.get());
-    mMdnsStateSubject.AddObserver(ncpHost);
-    mPublisher->Start();
-#endif
 #if OTBR_ENABLE_DBUS_SERVER
     mDBusAgent->Init(*mBorderAgent);
 #endif
@@ -301,9 +309,7 @@ void Application::InitNcpMode(void)
 
 void Application::DeinitNcpMode(void)
 {
-#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
-    mPublisher->Stop();
-#endif
+    /* empty */
 }
 
 } // namespace otbr

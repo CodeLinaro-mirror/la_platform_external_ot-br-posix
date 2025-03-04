@@ -34,7 +34,7 @@
 #include <memory>
 
 #include "common_utils.hpp"
-#include "host/rcp_host.hpp"
+#include "ncp/rcp_host.hpp"
 
 namespace otbr {
 namespace Android {
@@ -42,7 +42,7 @@ namespace Android {
 class AndroidRcpHost : public AndroidThreadHost
 {
 public:
-    AndroidRcpHost(Host::RcpHost &aRcpHost);
+    AndroidRcpHost(Ncp::RcpHost &aRcpHost);
     ~AndroidRcpHost(void) = default;
 
     void                         SetConfiguration(const OtDaemonConfiguration              &aConfiguration,
@@ -74,7 +74,7 @@ private:
 
     static AndroidRcpHost *sAndroidRcpHost;
 
-    Host::RcpHost        &mRcpHost;
+    Ncp::RcpHost         &mRcpHost;
     OtDaemonConfiguration mConfiguration;
     InfraLinkState        mInfraLinkState;
     int                   mInfraIcmp6Socket;

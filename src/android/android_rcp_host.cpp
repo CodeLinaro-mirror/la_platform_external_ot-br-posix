@@ -55,7 +55,7 @@ namespace Android {
 
 AndroidRcpHost *AndroidRcpHost::sAndroidRcpHost = nullptr;
 
-AndroidRcpHost::AndroidRcpHost(Host::RcpHost &aRcpHost)
+AndroidRcpHost::AndroidRcpHost(Ncp::RcpHost &aRcpHost)
     : mRcpHost(aRcpHost)
     , mConfiguration()
     , mInfraIcmp6Socket(-1)

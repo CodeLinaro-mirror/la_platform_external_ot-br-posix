@@ -43,7 +43,7 @@
 #include "common/mainloop.hpp"
 #include "rest/connection.hpp"
 
-using otbr::Host::RcpHost;
+using otbr::Ncp::RcpHost;
 using std::chrono::steady_clock;
 
 namespace otbr {

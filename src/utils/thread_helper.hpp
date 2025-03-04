@@ -56,7 +56,7 @@
 #endif
 
 namespace otbr {
-namespace Host {
+namespace Ncp {
 class RcpHost;
 }
 } // namespace otbr
@@ -87,7 +87,7 @@ public:
      * @param[in] aInstance  The Thread instance.
      * @param[in] aHost      The Thread controller.
      */
-    ThreadHelper(otInstance *aInstance, otbr::Host::RcpHost *aHost);
+    ThreadHelper(otInstance *aInstance, otbr::Ncp::RcpHost *aHost);
 
     /**
      * This method adds a callback for device role change.
@@ -340,7 +340,7 @@ private:
 
     otInstance *mInstance;
 
-    otbr::Host::RcpHost *mHost;
+    otbr::Ncp::RcpHost *mHost;
 
     ScanHandler                     mScanHandler;
     std::vector<otActiveScanResult> mScanResults;

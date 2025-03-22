@@ -40,9 +40,11 @@
 #include <openthread/dnssd_server.h>
 #include <openthread/ip6.h>
 #include <openthread/nat64.h>
+#include <openthread/netdiag.h>
 #include <openthread/openthread-system.h>
 #include <openthread/srp_server.h>
 #include <openthread/thread.h>
+#include <openthread/thread_ftd.h>
 #include <openthread/trel.h>
 #include <openthread/platform/infra_if.h>
 #include <openthread/platform/trel.h>
@@ -71,10 +73,16 @@ void AndroidRcpHost::SetConfiguration(const OtDaemonConfiguration              &
     otError          error = OT_ERROR_NONE;
     std::string      message;
     otLinkModeConfig linkModeConfig;
+    bool             borderRouterEnabled = aConfiguration.borderRouterEnabled;
 
     otbrLogInfo("Set configuration: %s", aConfiguration.toString().c_str());
 
     VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
+
+    SuccessOrExit(error   = otThreadSetVendorName(GetOtInstance(), aConfiguration.vendorName.c_str()),
+                  message = "Invalid vendor name " + aConfiguration.vendorName);
+    SuccessOrExit(error   = otThreadSetVendorModel(GetOtInstance(), aConfiguration.modelName.c_str()),
+                  message = "Invalid model name " + aConfiguration.modelName);
 
     // TODO: b/343814054 - Support enabling/disabling DHCPv6-PD.
     VerifyOrExit(!aConfiguration.dhcpv6PdEnabled, error = OT_ERROR_NOT_IMPLEMENTED,
@@ -87,7 +95,19 @@ void AndroidRcpHost::SetConfiguration(const OtDaemonConfiguration              &
     linkModeConfig = GetLinkModeConfig(/* aIsRouter= */ true);
     SuccessOrExit(error = otThreadSetLinkMode(GetOtInstance(), linkModeConfig), message = "Failed to set link mode");
 
-    if (aConfiguration.borderRouterEnabled && aConfiguration.srpServerWaitForBorderRoutingEnabled)
+    // - In non-BR mode, this device should try to be a router only when there are no other routers
+    // - 16 is the default ROUTER_UPGRADE_THRESHOLD value defined in OpenThread
+    otThreadSetRouterUpgradeThreshold(GetOtInstance(), (borderRouterEnabled ? 16 : 1));
+
+    // Sets much lower Leader / Partition weight for a non-BR device so that it would
+    // not attempt to be the new leader after merging partitions. Keeps BR using the
+    // default Leader weight value 64.
+    //
+    // TODO: b/404979710 - sets leader weight higher based on the new Thread 1.4 device
+    // properties feature.
+    otThreadSetLocalLeaderWeight(GetOtInstance(), (borderRouterEnabled ? 64 : 32));
+
+    if (borderRouterEnabled && aConfiguration.srpServerWaitForBorderRoutingEnabled)
     {
         // This will automatically disable fast-start mode if it was ever enabled
         otSrpServerSetAutoEnableMode(GetOtInstance(), true);
@@ -98,7 +118,7 @@ void AndroidRcpHost::SetConfiguration(const OtDaemonConfiguration              &
         otSrpServerEnableFastStartMode(GetOtInstance());
     }
 
-    SetBorderRouterEnabled(aConfiguration.borderRouterEnabled);
+    SetBorderRouterEnabled(borderRouterEnabled);
 
     mConfiguration = aConfiguration;
 

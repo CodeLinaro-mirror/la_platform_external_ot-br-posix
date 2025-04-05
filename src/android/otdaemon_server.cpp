@@ -48,6 +48,7 @@
 #include <openthread/nat64.h>
 #include <openthread/openthread-system.h>
 #include <openthread/srp_server.h>
+#include <openthread/thread_ftd.h>
 #include <openthread/platform/infra_if.h>
 #include <openthread/platform/radio.h>
 
@@ -56,7 +57,7 @@
 #include "android/common_utils.hpp"
 #include "android/otdaemon_telemetry.hpp"
 #include "common/code_utils.hpp"
-#include "ncp/thread_host.hpp"
+#include "host/thread_host.hpp"
 
 #define BYTE_ARR_END(arr) ((arr) + sizeof(arr))
 
@@ -67,8 +68,12 @@ namespace vendor {
 std::shared_ptr<VendorServer> VendorServer::newInstance(Application &aApplication)
 {
     return ndk::SharedRefBase::make<Android::OtDaemonServer>(
-        static_cast<otbr::Ncp::RcpHost &>(aApplication.GetHost()),
-        static_cast<otbr::Android::MdnsPublisher &>(aApplication.GetPublisher()), aApplication.GetBorderAgent());
+        static_cast<otbr::Host::RcpHost &>(aApplication.GetHost()),
+        static_cast<otbr::Android::MdnsPublisher &>(aApplication.GetPublisher()), aApplication.GetBorderAgent(),
+        aApplication.GetAdvertisingProxy(), [&aApplication]() {
+            aApplication.Deinit();
+            aApplication.Init();
+        });
 }
 
 } // namespace vendor
@@ -99,13 +104,17 @@ static const char *ThreadEnabledStateToString(int enabledState)
 
 OtDaemonServer *OtDaemonServer::sOtDaemonServer = nullptr;
 
-OtDaemonServer::OtDaemonServer(otbr::Ncp::RcpHost    &aRcpHost,
-                               otbr::Mdns::Publisher &aMdnsPublisher,
-                               otbr::BorderAgent     &aBorderAgent)
+OtDaemonServer::OtDaemonServer(otbr::Host::RcpHost    &aRcpHost,
+                               otbr::Mdns::Publisher  &aMdnsPublisher,
+                               otbr::BorderAgent      &aBorderAgent,
+                               otbr::AdvertisingProxy &aAdvProxy,
+                               ResetThreadHandler      aResetThreadHandler)
     : mHost(aRcpHost)
     , mAndroidHost(CreateAndroidHost())
     , mMdnsPublisher(static_cast<MdnsPublisher &>(aMdnsPublisher))
     , mBorderAgent(aBorderAgent)
+    , mAdvProxy(aAdvProxy)
+    , mResetThreadHandler(aResetThreadHandler)
 {
     mClientDeathRecipient =
         ::ndk::ScopedAIBinder_DeathRecipient(AIBinder_DeathRecipient_new(&OtDaemonServer::BinderDeathCallback));
@@ -231,7 +240,9 @@ Ipv6AddressInfo OtDaemonServer::ConvertToAddressInfo(const otNetifAddress &aAddr
     addrInfo.prefixLength = aAddress.mPrefixLength;
     addrInfo.isPreferred  = aAddress.mPreferred;
     addrInfo.isMeshLocal  = aAddress.mMeshLocal;
-    addrInfo.isActiveOmr  = otNetDataContainsOmrPrefix(GetOtInstance(), &addressPrefix);
+    addrInfo.isMeshLocalEid =
+        (memcmp(&aAddress.mAddress, otThreadGetMeshLocalEid(GetOtInstance()), sizeof(aAddress.mAddress)) == 0);
+    addrInfo.isActiveOmr = otNetDataContainsOmrPrefix(GetOtInstance(), &addressPrefix);
     return addrInfo;
 }
 
@@ -385,12 +396,6 @@ void OtDaemonServer::HandleEpskcStateChanged(void *aBinderServer)
 void OtDaemonServer::HandleEpskcStateChanged(void)
 {
     mState.ephemeralKeyState = GetEphemeralKeyState();
-
-    NotifyStateChanged(/* aListenerId*/ -1);
-}
-
-void OtDaemonServer::NotifyStateChanged(int64_t aListenerId)
-{
     if (mState.ephemeralKeyState == OT_EPHEMERAL_KEY_DISABLED)
     {
         mState.ephemeralKeyLifetimeMillis = 0;
@@ -402,6 +407,12 @@ void OtDaemonServer::NotifyStateChanged(int64_t aListenerId)
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
                 .count();
     }
+
+    NotifyStateChanged(/* aListenerId*/ -1);
+}
+
+void OtDaemonServer::NotifyStateChanged(int64_t aListenerId)
+{
     if (mCallback != nullptr)
     {
         mCallback->onStateChanged(mState, aListenerId);
@@ -412,20 +423,19 @@ int OtDaemonServer::GetEphemeralKeyState(void)
 {
     int ephemeralKeyState;
 
-    if (otBorderAgentIsEphemeralKeyActive(GetOtInstance()))
+    switch (otBorderAgentEphemeralKeyGetState(GetOtInstance()))
     {
-        if (otBorderAgentGetState(GetOtInstance()) == OT_BORDER_AGENT_STATE_ACTIVE)
-        {
-            ephemeralKeyState = OT_EPHEMERAL_KEY_IN_USE;
-        }
-        else
-        {
-            ephemeralKeyState = OT_EPHEMERAL_KEY_ENABLED;
-        }
-    }
-    else
-    {
+    case OT_BORDER_AGENT_STATE_STARTED:
+        ephemeralKeyState = OT_EPHEMERAL_KEY_ENABLED;
+        break;
+    case OT_BORDER_AGENT_STATE_CONNECTED:
+    case OT_BORDER_AGENT_STATE_ACCEPTED:
+        ephemeralKeyState = OT_EPHEMERAL_KEY_IN_USE;
+        break;
+    case OT_BORDER_AGENT_STATE_DISABLED:
+    case OT_BORDER_AGENT_STATE_STOPPED:
         ephemeralKeyState = OT_EPHEMERAL_KEY_DISABLED;
+        break;
     }
 
     return ephemeralKeyState;
@@ -521,7 +531,7 @@ std::unique_ptr<AndroidThreadHost> OtDaemonServer::CreateAndroidHost(void)
     switch (mHost.GetCoprocessorType())
     {
     case OT_COPROCESSOR_RCP:
-        host = std::make_unique<AndroidRcpHost>(static_cast<otbr::Ncp::RcpHost &>(mHost));
+        host = std::make_unique<AndroidRcpHost>(static_cast<otbr::Host::RcpHost &>(mHost));
         break;
 
     case OT_COPROCESSOR_NCP:
@@ -575,10 +585,15 @@ void OtDaemonServer::initializeInternal(const bool                              
     otbrError                error;
 
     mAndroidHost->SetConfiguration(aConfiguration, nullptr /* aReceiver */);
-    setCountryCodeInternal(aCountryCode, nullptr /* aReceiver */);
+
+    if (aConfiguration.countryCodeEnabled)
+    {
+        setCountryCodeInternal(aCountryCode, nullptr /* aReceiver */);
+    }
     registerStateCallbackInternal(aCallback, -1 /* listenerId */);
 
     mMdnsPublisher.SetINsdPublisher(aINsdPublisher);
+    mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
 
     for (const auto &txtAttr : aMeshcopTxts.nonStandardTxtEntries)
     {
@@ -593,6 +608,7 @@ void OtDaemonServer::initializeInternal(const bool                              
 
     mBorderAgent.SetEnabled(aEnabled && aConfiguration.borderRouterEnabled);
     mAndroidHost->SetTrelEnabled(aTrelEnabled);
+    mTrelEnabled = aTrelEnabled;
 
     if (aEnabled)
     {
@@ -683,7 +699,7 @@ void OtDaemonServer::setThreadEnabledInternal(const bool aEnabled, const std::sh
         // `aReceiver` should not be set here because the operation isn't finished yet
         UpdateThreadEnabledState(OT_STATE_DISABLING, nullptr /* aReceiver */);
 
-        LeaveGracefully([aReceiver, this]() {
+        LeaveGracefully(false /* aEraseDataset */, "disableThread", [aReceiver, this]() {
             // Ignore errors as those operations should always succeed
             (void)otThreadSetEnabled(GetOtInstance(), false);
             (void)otIp6SetEnabled(GetOtInstance(), false);
@@ -717,14 +733,16 @@ void OtDaemonServer::activateEphemeralKeyModeInternal(const int64_t             
     VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
     VerifyOrExit(isAttached(), error = static_cast<int>(IOtDaemon::ErrorCode::OT_ERROR_FAILED_PRECONDITION),
                  message = "Cannot activate ephemeral key mode when this device is not attached to Thread network");
-    VerifyOrExit(!otBorderAgentIsEphemeralKeyActive(GetOtInstance()), error = OT_ERROR_BUSY,
-                 message = "ephemeral key mode is already activated");
+    VerifyOrExit(otBorderAgentEphemeralKeyGetState(GetOtInstance()) != OT_BORDER_AGENT_STATE_DISABLED,
+                 error = OT_ERROR_INVALID_STATE, message = "ephemeral key manager is disabled");
+    VerifyOrExit(otBorderAgentEphemeralKeyGetState(GetOtInstance()) == OT_BORDER_AGENT_STATE_STOPPED,
+                 error = OT_ERROR_BUSY, message = "ephemeral key mode is already activated");
 
     otbrLogInfo("Activating ephemeral key mode with %lldms lifetime.", aLifetimeMillis);
 
     SuccessOrExit(error = mBorderAgent.CreateEphemeralKey(passcode), message = "Failed to create ephemeral key");
-    SuccessOrExit(error   = otBorderAgentSetEphemeralKey(GetOtInstance(), passcode.c_str(),
-                                                         static_cast<uint32_t>(aLifetimeMillis), 0 /* aUdpPort */),
+    SuccessOrExit(error   = otBorderAgentEphemeralKeyStart(GetOtInstance(), passcode.c_str(),
+                                                           static_cast<uint32_t>(aLifetimeMillis), 0 /* aUdpPort */),
                   message = "Failed to set ephemeral key");
 
 exit:
@@ -732,8 +750,10 @@ exit:
     {
         if (error == OT_ERROR_NONE)
         {
-            mState.ephemeralKeyPasscode = passcode;
-            mEphemeralKeyExpiryMillis   = std::chrono::duration_cast<std::chrono::milliseconds>(
+            mState.ephemeralKeyState          = GetEphemeralKeyState();
+            mState.ephemeralKeyPasscode       = passcode;
+            mState.ephemeralKeyLifetimeMillis = aLifetimeMillis;
+            mEphemeralKeyExpiryMillis         = std::chrono::duration_cast<std::chrono::milliseconds>(
                                             std::chrono::steady_clock::now().time_since_epoch())
                                             .count() +
                                         aLifetimeMillis;
@@ -761,10 +781,11 @@ void OtDaemonServer::deactivateEphemeralKeyModeInternal(const std::shared_ptr<IO
     VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
     otbrLogInfo("Deactivating ephemeral key mode.");
 
-    VerifyOrExit(otBorderAgentIsEphemeralKeyActive(GetOtInstance()), error = OT_ERROR_NONE);
+    VerifyOrExit(otBorderAgentEphemeralKeyGetState(GetOtInstance()) != OT_BORDER_AGENT_STATE_DISABLED &&
+                     otBorderAgentEphemeralKeyGetState(GetOtInstance()) != OT_BORDER_AGENT_STATE_STOPPED,
+                 error = OT_ERROR_NONE);
 
-    otBorderAgentDisconnect(GetOtInstance());
-    otBorderAgentClearEphemeralKey(GetOtInstance());
+    otBorderAgentEphemeralKeyStop(GetOtInstance());
 
 exit:
     PropagateResult(error, message, aReceiver);
@@ -907,19 +928,21 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
     error = otDatasetGetActiveTlvs(GetOtInstance(), &curDatasetTlvs);
     if (error == OT_ERROR_NONE && areDatasetsEqual(newDatasetTlvs, curDatasetTlvs) && isAttached())
     {
-        // Do not leave and re-join if this device has already joined the same network. This can help elimilate
-        // unnecessary connectivity and topology disruption and save the time for re-joining. It's more useful for use
-        // cases where Thread networks are dynamically brought up and torn down (e.g. Thread on mobile phones).
+        // Do not leave and re-join if this device has already joined the same network.
+        // This can help elimilate unnecessary connectivity and topology disruption and
+        // save the time for re-joining. It's more useful for use cases where Thread
+        // networks are dynamically brought up and torn down (e.g. Thread on mobile phones).
         aReceiver->onSuccess();
         ExitNow();
     }
 
-    if (otThreadGetDeviceRole(GetOtInstance()) != OT_DEVICE_ROLE_DISABLED)
+    // If this device has ever joined a different network, try to leave from previous
+    // network first. Do this even this device role is detached or disabled, this is for
+    // clearing any in-memory state of the previous network.
+    if (error == OT_ERROR_NONE && !areDatasetsEqual(newDatasetTlvs, curDatasetTlvs))
     {
-        LeaveGracefully([aActiveOpDatasetTlvs, aReceiver, this]() {
-            FinishLeave(true /* aEraseDataset */, nullptr);
-            join(aActiveOpDatasetTlvs, aReceiver);
-        });
+        LeaveGracefully(true /* aEraseDataset */, "join",
+                        [aActiveOpDatasetTlvs, aReceiver, this]() { join(aActiveOpDatasetTlvs, aReceiver); });
         ExitNow();
     }
 
@@ -935,7 +958,7 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
     // Abort an ongoing join()
     if (mJoinReceiver != nullptr)
     {
-        mJoinReceiver->onError(OT_ERROR_ABORT, "Join() is aborted");
+        mJoinReceiver->onError(OT_ERROR_ABORT, "Aborted by a new join()");
     }
     mJoinReceiver = aReceiver;
 
@@ -955,48 +978,89 @@ Status OtDaemonServer::leave(bool aEraseDataset, const std::shared_ptr<IOtStatus
 
 void OtDaemonServer::leaveInternal(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
-    std::string message;
-    int         error = OT_ERROR_NONE;
-
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
-
-    VerifyOrExit(mState.threadEnabled != OT_STATE_DISABLING, error = OT_ERROR_BUSY, message = "Thread is disabling");
-
-    if (mState.threadEnabled == OT_STATE_DISABLED)
+    if (GetOtInstance() == nullptr)
     {
-        FinishLeave(aEraseDataset, aReceiver);
+        PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver);
+    }
+    else
+    {
+        LeaveGracefully(aEraseDataset, "leave", [aReceiver]() { PropagateResult(OT_ERROR_NONE, "", aReceiver); });
+    }
+}
+
+void OtDaemonServer::LeaveGracefully(bool aEraseDataset, const std::string &aCallerTag, const LeaveCallback &aCallback)
+{
+    otOperationalDatasetTlvs curDatasetTlvs;
+
+    VerifyOrDie(GetOtInstance() != nullptr, "OT is not initialized");
+
+    if (otThreadGetDeviceRole(GetOtInstance()) != OT_DEVICE_ROLE_DISABLED)
+    {
+        otbrLogInfo("Start graceful leave...");
+
+        mLeaveCallbacks.push_back([aEraseDataset, aCallerTag, aCallback, this]() {
+            assert(otThreadGetDeviceRole(GetOtInstance()) == OT_DEVICE_ROLE_DISABLED);
+            LeaveGracefully(aEraseDataset, aCallerTag, aCallback);
+        });
+
+        // Ignores the OT_ERROR_BUSY error if a detach has already been requested.
+        // `otThreadDetachGracefully()` will invoke the `DetachGracefullyCallback`
+        // callabck in 0 seconds if this device role is detached or disabled. So
+        // `DetachGracefullyCallback` is guaranteed to be called in all cases
+        (void)otThreadDetachGracefully(GetOtInstance(), DetachGracefullyCallback, this);
         ExitNow();
     }
 
-    LeaveGracefully([aEraseDataset, aReceiver, this]() { FinishLeave(aEraseDataset, aReceiver); });
+    // Any join() or scheduleMigration() onging requests will be aborted
+    if (mJoinReceiver != nullptr)
+    {
+        mJoinReceiver->onError(OT_ERROR_ABORT, "Aborted by a " + aCallerTag + " operation");
+        mJoinReceiver = nullptr;
+    }
+
+    if (mMigrationReceiver != nullptr)
+    {
+        mMigrationReceiver->onError(OT_ERROR_ABORT, "Aborted by a " + aCallerTag + " operation");
+        mMigrationReceiver = nullptr;
+    }
+
+    // It's not necessary to reset the OpenThread instance if it has no dataset
+    if (aEraseDataset && otDatasetGetActiveTlvs(GetOtInstance(), &curDatasetTlvs) == OT_ERROR_NONE)
+    {
+        SuccessOrDie(otInstanceErasePersistentInfo(GetOtInstance()), "Failed to erase persistent info");
+        mResetThreadHandler();
+
+        // The OtDaemonServer runtime states are outdated after
+        // the OT instances has been destroyed in `mResetThreadHandler`
+        ResetRuntimeStatesAfterLeave();
+
+        initializeInternal(mState.threadEnabled, mAndroidHost->GetConfiguration(), mINsdPublisher, mMeshcopTxts,
+                           mCountryCode, mTrelEnabled, mCallback);
+    }
+
+    otbrLogInfo("Leave() is done");
+
+    aCallback();
 
 exit:
-    if (error != OT_ERROR_NONE)
-    {
-        PropagateResult(error, message, aReceiver);
-    }
+    return;
 }
 
-void OtDaemonServer::FinishLeave(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
+void OtDaemonServer::ResetRuntimeStatesAfterLeave()
 {
-    if (aEraseDataset)
-    {
-        (void)otInstanceErasePersistentInfo(GetOtInstance());
-    }
+    bool threadEnabled = mState.threadEnabled;
 
-    // TODO: b/323301831 - Re-init the Application class.
-    if (aReceiver != nullptr)
-    {
-        aReceiver->onSuccess();
-    }
-}
+    assert(mJoinReceiver == nullptr);
+    assert(mMigrationReceiver == nullptr);
 
-void OtDaemonServer::LeaveGracefully(const LeaveCallback &aReceiver)
-{
-    mLeaveCallbacks.push_back(aReceiver);
+    // The Thread Enabled state survives the leave() API call.
+    // This indicates that we should move the threadEnabled state
+    // out of the OtDaemonState class
+    mState               = OtDaemonState();
+    mState.threadEnabled = threadEnabled;
 
-    // Ignores the OT_ERROR_BUSY error if a detach has already been requested
-    (void)otThreadDetachGracefully(GetOtInstance(), DetachGracefullyCallback, this);
+    mOnMeshPrefixes.clear();
+    mEphemeralKeyExpiryMillis = 0;
 }
 
 void OtDaemonServer::DetachGracefullyCallback(void *aBinderServer)
@@ -1007,19 +1071,7 @@ void OtDaemonServer::DetachGracefullyCallback(void *aBinderServer)
 
 void OtDaemonServer::DetachGracefullyCallback(void)
 {
-    otbrLogInfo("detach success...");
-
-    if (mJoinReceiver != nullptr)
-    {
-        mJoinReceiver->onError(OT_ERROR_ABORT, "Aborted by leave/disable operation");
-        mJoinReceiver = nullptr;
-    }
-
-    if (mMigrationReceiver != nullptr)
-    {
-        mMigrationReceiver->onError(OT_ERROR_ABORT, "Aborted by leave/disable operation");
-        mMigrationReceiver = nullptr;
-    }
+    otbrLogInfo("DetachGracefully success...");
 
     for (auto &callback : mLeaveCallbacks)
     {
@@ -1114,7 +1166,12 @@ Status OtDaemonServer::setCountryCode(const std::string                        &
 void OtDaemonServer::setCountryCodeInternal(const std::string                        &aCountryCode,
                                             const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
-    mHost.SetCountryCode(aCountryCode, [aReceiver](otError aError, const std::string &aMessage) {
+    mHost.SetCountryCode(aCountryCode, [aReceiver, aCountryCode, this](otError aError, const std::string &aMessage) {
+        if (aError == OT_ERROR_NONE)
+        {
+            mCountryCode = aCountryCode;
+        }
+
         PropagateResult(aError, aMessage, aReceiver);
     });
 }
@@ -1150,13 +1207,13 @@ Status OtDaemonServer::setChannelMaxPowersInternal(const std::vector<ChannelMaxP
                                                    const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
     // Transform aidl ChannelMaxPower to ThreadHost::ChannelMaxPower
-    std::vector<Ncp::ThreadHost::ChannelMaxPower> channelMaxPowers(aChannelMaxPowers.size());
+    std::vector<Host::ThreadHost::ChannelMaxPower> channelMaxPowers(aChannelMaxPowers.size());
     std::transform(aChannelMaxPowers.begin(), aChannelMaxPowers.end(), channelMaxPowers.begin(),
                    [](const ChannelMaxPower &aChannelMaxPower) {
                        // INT_MIN indicates that the corresponding channel is disabled in Thread Android API
                        // `setChannelMaxPowers()` INT16_MAX indicates that the corresponding channel is disabled in
                        // OpenThread API `otPlatRadioSetChannelTargetPower()`.
-                       return Ncp::ThreadHost::ChannelMaxPower(
+                       return Host::ThreadHost::ChannelMaxPower(
                            aChannelMaxPower.channel,
                            aChannelMaxPower.maxPower == INT_MIN
                                ? INT16_MAX
@@ -1173,8 +1230,14 @@ Status OtDaemonServer::setChannelMaxPowersInternal(const std::vector<ChannelMaxP
 Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration              &aConfiguration,
                                         const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
-    mTaskRunner.Post(
-        [aConfiguration, aReceiver, this]() { mAndroidHost->SetConfiguration(aConfiguration, aReceiver); });
+    mTaskRunner.Post([aConfiguration, aReceiver, this]() {
+        if (aConfiguration != mAndroidHost->GetConfiguration())
+        {
+            mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
+            mBorderAgent.SetEnabled(mState.threadEnabled && aConfiguration.borderRouterEnabled);
+            mAndroidHost->SetConfiguration(aConfiguration, aReceiver);
+        }
+    });
 
     return Status::ok();
 }

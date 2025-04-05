@@ -66,6 +66,8 @@ install_packages_apt()
     # Avahi should be included for reference device builds.
     if [[ ${OTBR_MDNS} == "avahi" || ${OT_BACKBONE_CI} == 1 || ${REFERENCE_DEVICE} == 1 ]]; then
         sudo apt-get install --no-install-recommends -y avahi-daemon
+        # Increase the object number limit to rid of 'Too many objects' error
+        sudo sed -i 's/^#objects-per-client-max=[0-9]\+/objects-per-client-max=30000/' /etc/avahi/avahi-daemon.conf
     fi
 
     (MDNS_RESPONDER_SOURCE_NAME=mDNSResponder-1790.80.10 \
@@ -82,9 +84,6 @@ install_packages_apt()
         ) \
         && cd mDNSPosix \
         && make os=linux tls=no && sudo make install os=linux tls=no)
-
-    # Boost
-    sudo apt-get install --no-install-recommends -y libboost-dev libboost-filesystem-dev libboost-system-dev
 
     # nat64
     without NAT64 || {
@@ -106,6 +105,20 @@ install_packages_apt()
         fi
     }
 
+    # dhcpv6-pd
+    without DHCPV6_PD_REF || {
+        sudo apt-get install --no-install-recommends -y dhcpcd
+        sudo mkdir -p /etc/systemd/system/dhcpcd.service.d
+        # allow edit system config file eg. /etc/radvd.conf
+        sudo tee /etc/systemd/system/dhcpcd.service.d/custom.conf >/dev/null <<EOF
+[Service]
+ProtectSystem=false
+EOF
+        # reload dhcpcd daemon to activate the custom.conf
+        sudo systemctl daemon-reload
+        sudo apt-get install --no-install-recommends -y radvd
+    }
+
     # network-manager
     without NETWORK_MANAGER || sudo apt-get install --no-install-recommends -y dnsmasq network-manager
 
@@ -116,7 +129,7 @@ install_packages_apt()
     sudo apt-get install --no-install-recommends -y libjsoncpp-dev
 
     # reference device
-    without REFERENCE_DEVICE || sudo apt-get install --no-install-recommends -y radvd dnsutils avahi-utils
+    without REFERENCE_DEVICE || sudo apt-get install --no-install-recommends -y radvd dnsutils avahi-utils iperf3
 
     # backbone-router
     without BACKBONE_ROUTER || sudo apt-get install --no-install-recommends -y libnetfilter-queue1 libnetfilter-queue-dev
@@ -147,7 +160,6 @@ install_packages_rpm()
     with RELEASE || sudo $PM install -y cmake ninja-build
     sudo $PM install -y dbus-devel
     sudo $PM install -y avahi avahi-devel
-    sudo $PM install -y boost-devel boost-filesystem boost-system
     [ "$NAT64_SERVICE" != "tayga" ] || sudo $PM install -y tayga
     sudo $PM install -y iptables
     sudo $PM install -y jsoncpp-devel
@@ -157,7 +169,7 @@ install_packages_rpm()
 
 install_packages_brew()
 {
-    brew install boost cmake dbus jsoncpp ninja
+    brew install cmake dbus jsoncpp ninja
 }
 
 install_packages_source()

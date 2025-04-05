@@ -44,15 +44,15 @@
 #include <openthread/srp_server.h>
 
 #include "common/code_utils.hpp"
+#include "host/rcp_host.hpp"
 #include "mdns/mdns.hpp"
-#include "ncp/rcp_host.hpp"
 
 namespace otbr {
 
 /**
  * This class implements the Advertising Proxy.
  */
-class AdvertisingProxy : private NonCopyable
+class AdvertisingProxy : public Mdns::StateObserver, private NonCopyable
 {
 public:
     /**
@@ -61,7 +61,7 @@ public:
      * @param[in] aHost       A reference to the NCP controller.
      * @param[in] aPublisher  A reference to the mDNS publisher.
      */
-    explicit AdvertisingProxy(Ncp::RcpHost &aHost, Mdns::Publisher &aPublisher);
+    explicit AdvertisingProxy(Host::RcpHost &aHost, Mdns::Publisher &aPublisher);
 
     /**
      * This method enables/disables the Advertising Proxy.
@@ -69,6 +69,9 @@ public:
      * @param[in] aIsEnabled  Whether to enable the Advertising Proxy.
      */
     void SetEnabled(bool aIsEnabled);
+
+    /** Sets `true` to allow advertising ML-EID. */
+    void SetAllowMlEid(bool aAllowMlEid) { mAllowMlEid = aAllowMlEid; }
 
     /**
      * This method publishes all registered hosts and services.
@@ -80,7 +83,7 @@ public:
      *
      * @param[in] aState  The state of mDNS publisher.
      */
-    void HandleMdnsState(Mdns::Publisher::State aState);
+    void HandleMdnsState(Mdns::Publisher::State aState) override;
 
 private:
     struct OutstandingUpdate
@@ -123,12 +126,13 @@ private:
     otInstance *GetInstance(void) { return mHost.GetInstance(); }
 
     // A reference to the NCP controller, has no ownership.
-    Ncp::RcpHost &mHost;
+    Host::RcpHost &mHost;
 
     // A reference to the mDNS publisher, has no ownership.
     Mdns::Publisher &mPublisher;
 
     bool mIsEnabled;
+    bool mAllowMlEid;
 
     // A vector that tracks outstanding updates.
     std::vector<OutstandingUpdate> mOutstandingUpdates;

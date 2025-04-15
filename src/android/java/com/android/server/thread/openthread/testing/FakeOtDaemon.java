@@ -89,6 +89,7 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     @Nullable private IOtDaemonCallback mCallback;
     @Nullable private Long mCallbackListenerId;
     @Nullable private RemoteException mJoinException;
+    @Nullable private RemoteException mSetEnabledException;
     @Nullable private String mNat64Cidr;
     @Nullable private RemoteException mSetNat64CidrException;
     @Nullable private RemoteException mRunOtCtlCommandException;
@@ -245,7 +246,12 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     }
 
     @Override
-    public void setThreadEnabled(boolean enabled, IOtStatusReceiver receiver) {
+    public void setThreadEnabled(boolean enabled, IOtStatusReceiver receiver)
+            throws RemoteException {
+        if (mSetEnabledException != null) {
+            throw mSetEnabledException;
+        }
+
         mHandler.post(
                 () -> {
                     mState.threadEnabled = enabled ? OT_STATE_ENABLED : OT_STATE_DISABLED;
@@ -383,6 +389,11 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     /** Sets the {@link RemoteException} which will be thrown from {@link #join}. */
     public void setJoinException(RemoteException exception) {
         mJoinException = exception;
+    }
+
+    /** Sets the {@link RemoteException} which will be thrown from {@link #setThreadEnabled}. */
+    public void setSetEnabledException(RemoteException exception) {
+        mSetEnabledException = exception;
     }
 
     @Override

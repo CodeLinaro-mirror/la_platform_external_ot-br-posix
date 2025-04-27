@@ -294,6 +294,22 @@ public final class FakeOtDaemonTest {
     }
 
     @Test
+    public void setSetEnabledException_setEnabledFailsWithTheGivenException() {
+        final RemoteException setEnabledException =
+                new RemoteException("setThreadEnabled() failed");
+
+        mFakeOtDaemon.setSetEnabledException(setEnabledException);
+
+        RemoteException thrown =
+                assertThrows(
+                        RemoteException.class,
+                        () ->
+                                mFakeOtDaemon.setThreadEnabled(
+                                        true, new IOtStatusReceiver.Default()));
+        assertThat(thrown).isEqualTo(setEnabledException);
+    }
+
+    @Test
     public void setConfiguration_validConfig_onSuccessIsInvoked() throws Exception {
         IOtStatusReceiver receiver = mock(IOtStatusReceiver.class);
         mConfig = new OtDaemonConfiguration.Builder().setNat64Enabled(true).build();

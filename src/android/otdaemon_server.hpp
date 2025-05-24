@@ -183,9 +183,8 @@ private:
     Ipv6AddressInfo     ConvertToAddressInfo(const otNetifMulticastAddress &aAddress);
     void        UpdateThreadEnabledState(const int aEnabled, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
     void        EnableThread(const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-    static void HandleEpskcStateChanged(void *aBinderServer);
-    void        HandleEpskcStateChanged(void);
-    int         GetEphemeralKeyState(void);
+    void        HandleEpskcStateChanged(otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort);
+    int         GetEphemeralKeyState(otBorderAgentEphemeralKeyState aEpskcState);
     void        NotifyStateChanged(int64_t aListenerId);
 
     static OtDaemonServer *sOtDaemonServer;

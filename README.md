@@ -1,4 +1,4 @@
-[![Build Status][ot-gh-action-build-svg]][ot-gh-action-build] [![Docker Status][ot-gh-action-docker-svg]][ot-gh-action-docker] [![Build Status][otbr-travis-svg]][otbr-travis] [![Coverage Status][otbr-codecov-svg]][otbr-codecov]
+[![Build Status][ot-gh-action-build-svg]][ot-gh-action-build] [![Docker Status][ot-gh-action-docker-svg]][ot-gh-action-docker] [![Build Status][otbr-travis-svg]][otbr-travis] [![Coverage Status][otbr-codecov-svg]][otbr-codecov] [![Ask DeepWiki][deepwiki-svg]][deepwiki]
 
 ---
 
@@ -23,7 +23,6 @@ OTBR includes a number of features, including:
 - Thread Border Agent to support an External Commissioner
 - DHCPv6 Prefix Delegation to obtain IPv6 prefixes for a Thread network
 - NAT64 for connecting to IPv4 networks
-- DNS64 to allow Thread devices to initiate communications by name to an IPv4-only server
 - Docker support
 
 More information about Thread can be found at [threadgroup.org](http://threadgroup.org/). Thread is a registered trademark of the Thread Group, Inc.
@@ -36,6 +35,8 @@ More information about Thread can be found at [threadgroup.org](http://threadgro
 [otbr-travis-svg]: https://travis-ci.org/openthread/ot-br-posix.svg?branch=main
 [otbr-codecov]: https://codecov.io/gh/openthread/ot-br-posix
 [otbr-codecov-svg]: https://codecov.io/gh/openthread/ot-br-posix/branch/main/graph/badge.svg
+[deepwiki]: https://deepwiki.com/openthread/ot-br-posix
+[deepwiki-svg]: https://deepwiki.com/badge.svg
 
 ## Getting started
 

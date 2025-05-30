@@ -481,6 +481,9 @@ message ThreadnetworkTelemetryDataReported {
 
     // Information about the Border Agent
     optional BorderAgentInfo border_agent_info = 7;
+
+    // Whether multi-AIL is detected.
+    optional bool multi_ail_detected = 8;
   }
 
   message RcpStabilityStatistics {

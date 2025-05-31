@@ -295,27 +295,29 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
 
     otCliInit(GetOtInstance(), OutputCallback, &aFd);
 
+    // Dump device level information
     DumpCliCommand("state", aFd);
     DumpCliCommand("srp server state", aFd);
     DumpCliCommand("srp server service", aFd);
     DumpCliCommand("srp server host", aFd);
-    DumpCliCommand("dataset activetimestamp", aFd);
-    DumpCliCommand("dataset channel", aFd);
-    DumpCliCommand("dataset channelmask", aFd);
-    DumpCliCommand("dataset extpanid", aFd);
-    DumpCliCommand("dataset meshlocalprefix", aFd);
-    DumpCliCommand("dataset networkname", aFd);
-    DumpCliCommand("dataset panid", aFd);
-    DumpCliCommand("dataset securitypolicy", aFd);
-    DumpCliCommand("leaderdata", aFd);
     DumpCliCommand("eidcache", aFd);
     DumpCliCommand("counters mac", aFd);
     DumpCliCommand("counters mle", aFd);
     DumpCliCommand("counters ip", aFd);
-    DumpCliCommand("router table", aFd);
+    DumpCliCommand("counters br", aFd);
     DumpCliCommand("neighbor table", aFd);
     DumpCliCommand("ipaddr -v", aFd);
+    DumpCliCommand("br multiail", aFd);
+    DumpCliCommand("br prefixtable", aFd);
+    DumpCliCommand("br peers", aFd);
+
+    // Dump network level information
+    DumpCliCommand("leaderdata", aFd);
+    DumpCliCommand("dataset active -ns", aFd);
+    DumpCliCommand("router table", aFd);
     DumpCliCommand("netdata show", aFd);
+
+    // TODO: b/420365488 - Add mesh topology dump
 
     fsync(aFd);
 

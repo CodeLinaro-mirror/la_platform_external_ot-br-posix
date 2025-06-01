@@ -28,6 +28,7 @@
 #include "android/otdaemon_telemetry.hpp"
 
 #include <openthread/border_agent.h>
+#include <openthread/border_routing.h>
 #include <openthread/nat64.h>
 #include <openthread/openthread-system.h>
 #include <openthread/thread.h>
@@ -756,6 +757,7 @@ otError RetrieveTelemetryAtom(otInstance                         *otInstance,
         RetrieveNat64State(otInstance, wpanBorderRouter);
         RetrieveBorderAgentInfo(otInstance, wpanBorderRouter->mutable_border_agent_info());
         RetrieveTrelInfo(otInstance, wpanBorderRouter->mutable_trel_info());
+        wpanBorderRouter->set_multi_ail_detected(otBorderRoutingIsMultiAilDetected(otInstance));
     }
 
     return error;

@@ -49,7 +49,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
                               true /* aDryRun */,
                               false /* aEnableAutoAttach*/};
     auto                   mdnsPublisher = static_cast<MdnsPublisher *>(Publisher::Create([](Publisher::State) {}));
-    otbr::BorderAgent      borderAgent{rcpHost, *mdnsPublisher};
+    otbr::BorderAgent      borderAgent{*mdnsPublisher};
     otbr::AdvertisingProxy advProxy{rcpHost, *mdnsPublisher};
 
     auto service = ndk::SharedRefBase::make<OtDaemonServer>(rcpHost, *mdnsPublisher, borderAgent, advProxy, []() {});

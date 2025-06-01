@@ -136,8 +136,11 @@ void OtDaemonServer::Init(void)
     otIcmp6SetEchoMode(GetOtInstance(), OT_ICMP6_ECHO_HANDLER_DISABLED);
     otIp6SetReceiveFilterEnabled(GetOtInstance(), true);
     otNat64SetReceiveIp4Callback(GetOtInstance(), &OtDaemonServer::ReceiveCallback, this);
-    mBorderAgent.AddEphemeralKeyChangedCallback([this]() { HandleEpskcStateChanged(); });
-    mBorderAgent.SetEphemeralKeyEnabled(true);
+    mHost.AddEphemeralKeyStateChangedCallback([this](otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort) {
+        HandleEpskcStateChanged(aEpskcState, aPort);
+    });
+
+    otBorderAgentEphemeralKeySetEnabled(GetOtInstance(), true);
     otSysUpstreamDnsServerSetResolvConfEnabled(false);
 
     mTaskRunner.Post(kTelemetryCheckInterval, [this]() { PushTelemetryIfConditionMatch(); });
@@ -388,14 +391,9 @@ exit:
     }
 }
 
-void OtDaemonServer::HandleEpskcStateChanged(void *aBinderServer)
+void OtDaemonServer::HandleEpskcStateChanged(otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort)
 {
-    static_cast<OtDaemonServer *>(aBinderServer)->HandleEpskcStateChanged();
-}
-
-void OtDaemonServer::HandleEpskcStateChanged(void)
-{
-    mState.ephemeralKeyState = GetEphemeralKeyState();
+    mState.ephemeralKeyState = GetEphemeralKeyState(aEpskcState);
     if (mState.ephemeralKeyState == OT_EPHEMERAL_KEY_DISABLED)
     {
         mState.ephemeralKeyLifetimeMillis = 0;
@@ -419,11 +417,11 @@ void OtDaemonServer::NotifyStateChanged(int64_t aListenerId)
     }
 }
 
-int OtDaemonServer::GetEphemeralKeyState(void)
+int OtDaemonServer::GetEphemeralKeyState(otBorderAgentEphemeralKeyState aEpskcState)
 {
     int ephemeralKeyState;
 
-    switch (otBorderAgentEphemeralKeyGetState(GetOtInstance()))
+    switch (aEpskcState)
     {
     case OT_BORDER_AGENT_STATE_STARTED:
         ephemeralKeyState = OT_EPHEMERAL_KEY_ENABLED;
@@ -599,7 +597,7 @@ void OtDaemonServer::initializeInternal(const bool                              
     {
         nonStandardTxts.emplace_back(txtAttr.name.c_str(), txtAttr.value.data(), txtAttr.value.size());
     }
-    error = mBorderAgent.SetMeshCopServiceValues(instanceName, aMeshcopTxts.modelName, aMeshcopTxts.vendorName,
+    error = mBorderAgent.SetMeshCoPServiceValues(instanceName, aMeshcopTxts.modelName, aMeshcopTxts.vendorName,
                                                  aMeshcopTxts.vendorOui, nonStandardTxts);
     if (error != OTBR_ERROR_NONE)
     {
@@ -750,7 +748,7 @@ exit:
     {
         if (error == OT_ERROR_NONE)
         {
-            mState.ephemeralKeyState          = GetEphemeralKeyState();
+            mState.ephemeralKeyState          = GetEphemeralKeyState(otBorderAgentEphemeralKeyGetState(GetOtInstance()));
             mState.ephemeralKeyPasscode       = passcode;
             mState.ephemeralKeyLifetimeMillis = aLifetimeMillis;
             mEphemeralKeyExpiryMillis         = std::chrono::duration_cast<std::chrono::milliseconds>(

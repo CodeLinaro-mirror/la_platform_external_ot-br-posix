@@ -299,25 +299,62 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
 
     // Dump device level information
     DumpCliCommand("state", aFd);
+    DumpCliCommand("attachtime", aFd);
+    DumpCliCommand("uptime", aFd);
+    DumpCliCommand("ipaddr -v", aFd);
+    DumpCliCommand("ipmaddr", aFd);
+    DumpCliCommand("neighbor table", aFd);
+    DumpCliCommand("neighbor conntime", aFd);
+    DumpCliCommand("br multiail", aFd);
+    DumpCliCommand("br prefixtable", aFd);
+    DumpCliCommand("br peers", aFd);
+    DumpCliCommand("br routers", aFd);
+
+    DumpCliCommand("bufferinfo", aFd);
+    DumpCliCommand("eidcache", aFd);
+    DumpCliCommand("netstat", aFd);
+
+    DumpCliCommand("ccathreshold", aFd);
+    DumpCliCommand("coex metrics", aFd);
+    DumpCliCommand("csl", aFd);
+    DumpCliCommand("csl accuracy", aFd);
+    DumpCliCommand("csl uncertainty", aFd);
+    DumpCliCommand("linkmetricsmgr show", aFd);
+    DumpCliCommand("multiradio", aFd);
+    DumpCliCommand("multiradio neighbor list", aFd);
+
+    DumpCliCommand("trel", aFd);
+    DumpCliCommand("trel peers", aFd);
+    DumpCliCommand("trel counters", aFd);
+
+    DumpCliCommand("nat64 state", aFd);
+    DumpCliCommand("nat64 mappings", aFd);
+    DumpCliCommand("nat64 counters", aFd);
+
+    DumpCliCommand("br pd state", aFd);
+    DumpCliCommand("br rdnsstable", aFd);
+
     DumpCliCommand("srp server state", aFd);
     DumpCliCommand("srp server service", aFd);
     DumpCliCommand("srp server host", aFd);
-    DumpCliCommand("eidcache", aFd);
+
     DumpCliCommand("counters mac", aFd);
     DumpCliCommand("counters mle", aFd);
     DumpCliCommand("counters ip", aFd);
     DumpCliCommand("counters br", aFd);
-    DumpCliCommand("neighbor table", aFd);
-    DumpCliCommand("ipaddr -v", aFd);
-    DumpCliCommand("br multiail", aFd);
-    DumpCliCommand("br prefixtable", aFd);
-    DumpCliCommand("br peers", aFd);
 
     // Dump network level information
     DumpCliCommand("leaderdata", aFd);
     DumpCliCommand("dataset active -ns", aFd);
     DumpCliCommand("router table", aFd);
     DumpCliCommand("netdata show", aFd);
+
+    // Add history tracker for significant events
+    DumpCliCommand("history netinfo", aFd);
+    DumpCliCommand("history neighbor", aFd);
+    DumpCliCommand("history router", aFd);
+    DumpCliCommand("history prefix", aFd);
+    DumpCliCommand("history route", aFd);
 
     // TODO: b/420365488 - Add mesh topology dump
 

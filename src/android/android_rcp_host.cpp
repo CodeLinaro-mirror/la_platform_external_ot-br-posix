@@ -293,6 +293,8 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
     OT_UNUSED_VARIABLE(aArgs);
     OT_UNUSED_VARIABLE(aNumArgs);
 
+    VerifyOrExit(GetOtInstance() != nullptr);
+
     otCliInit(GetOtInstance(), OutputCallback, &aFd);
 
     // Dump device level information
@@ -323,6 +325,7 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
 
     otSysCliInitUsingDaemon(GetOtInstance());
 
+exit:
     return STATUS_OK;
 }
 

@@ -47,6 +47,7 @@
 #include "common/code_utils.hpp"
 #include "mdns/mdns.hpp"
 #include "proto/threadnetwork_atoms.pb.h"
+#include "android/telemetry_retriever_border_agent.hpp"
 
 namespace otbr {
 namespace Android {
@@ -251,6 +252,8 @@ void RetrieveBorderAgentInfo(otInstance *aInstance, TelemetryData::BorderAgentIn
 
     baCounters->set_mgmt_active_get_reqs(otBorderAgentCounters.mMgmtActiveGets);
     baCounters->set_mgmt_pending_get_reqs(otBorderAgentCounters.mMgmtPendingGets);
+
+    TelemetryRetriever::BorderAgent::GetBorderAgent(aInstance).RetrieveEpskcJourneyInfo(aBorderAgentInfo);
 }
 
 void RetrieveTrelInfo(otInstance *aInstance, TelemetryData::TrelInfo *aTrelInfo)

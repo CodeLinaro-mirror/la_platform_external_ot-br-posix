@@ -124,10 +124,11 @@ private:
                              const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
     void   scheduleMigrationInternal(const std::vector<uint8_t>               &aPendingOpDatasetTlvs,
                                      const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-    Status setCountryCode(const std::string &aCountryCode, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
+    Status setCountryCode(const std::string                        &aCountryCode,
+                          const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
     void   setCountryCodeInternal(const std::string &aCountryCode, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
     Status setChannelMaxPowers(const std::vector<ChannelMaxPower>       &aChannelMaxPowers,
-                               const std::shared_ptr<IOtStatusReceiver> &aReceiver);
+                               const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
     Status setChannelMaxPowersInternal(const std::vector<ChannelMaxPower>       &aChannelMaxPowers,
                                        const std::shared_ptr<IOtStatusReceiver> &aReceiver);
     Status setConfiguration(const OtDaemonConfiguration              &aConfiguration,
@@ -181,11 +182,11 @@ private:
     bool                RefreshOnMeshPrefixes();
     Ipv6AddressInfo     ConvertToAddressInfo(const otNetifAddress &aAddress);
     Ipv6AddressInfo     ConvertToAddressInfo(const otNetifMulticastAddress &aAddress);
-    void        UpdateThreadEnabledState(const int aEnabled, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-    void        EnableThread(const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-    void        HandleEpskcStateChanged(otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort);
-    int         GetEphemeralKeyState(otBorderAgentEphemeralKeyState aEpskcState);
-    void        NotifyStateChanged(int64_t aListenerId);
+    void UpdateThreadEnabledState(const int aEnabled, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
+    void EnableThread(const std::shared_ptr<IOtStatusReceiver> &aReceiver);
+    void HandleEpskcStateChanged(otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort);
+    int  GetEphemeralKeyState(otBorderAgentEphemeralKeyState aEpskcState);
+    void NotifyStateChanged(int64_t aListenerId);
 
     static OtDaemonServer *sOtDaemonServer;
 

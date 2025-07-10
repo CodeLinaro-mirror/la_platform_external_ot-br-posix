@@ -550,6 +550,8 @@ Status OtDaemonServer::initialize(const bool                                aEna
                                   const bool                                aTrelEnabled,
                                   const std::shared_ptr<IOtDaemonCallback> &aCallback)
 {
+    VerifyOrExit(mHost.IsInitialized());
+
     otbrLogInfo("OT daemon is initialized by system server (enabled=%s, tunFd=%d)", (aEnabled ? "true" : "false"),
                 aTunFd.get());
 
@@ -567,6 +569,7 @@ Status OtDaemonServer::initialize(const bool                                aEna
                                aCallback);
         });
 
+exit:
     return Status::ok();
 }
 
@@ -668,8 +671,11 @@ void OtDaemonServer::EnableThread(const std::shared_ptr<IOtStatusReceiver> &aRec
 
 Status OtDaemonServer::setThreadEnabled(const bool aEnabled, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aEnabled, aReceiver, this]() { setThreadEnabledInternal(aEnabled, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -677,8 +683,6 @@ void OtDaemonServer::setThreadEnabledInternal(const bool aEnabled, const std::sh
 {
     int         error = OT_ERROR_NONE;
     std::string message;
-
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
 
     VerifyOrExit(mState.threadEnabled != OT_STATE_DISABLING, error = OT_ERROR_BUSY, message = "Thread is disabling");
 
@@ -715,9 +719,12 @@ exit:
 Status OtDaemonServer::activateEphemeralKeyMode(const int64_t                             aLifetimeMillis,
                                                 const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post(
         [aLifetimeMillis, aReceiver, this]() { activateEphemeralKeyModeInternal(aLifetimeMillis, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -728,7 +735,6 @@ void OtDaemonServer::activateEphemeralKeyModeInternal(const int64_t             
     std::string message;
     std::string passcode;
 
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
     VerifyOrExit(isAttached(), error = static_cast<int>(IOtDaemon::ErrorCode::OT_ERROR_FAILED_PRECONDITION),
                  message = "Cannot activate ephemeral key mode when this device is not attached to Thread network");
     VerifyOrExit(otBorderAgentEphemeralKeyGetState(GetOtInstance()) != OT_BORDER_AGENT_STATE_DISABLED,
@@ -766,8 +772,11 @@ exit:
 
 Status OtDaemonServer::deactivateEphemeralKeyMode(const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aReceiver, this]() { deactivateEphemeralKeyModeInternal(aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -776,7 +785,6 @@ void OtDaemonServer::deactivateEphemeralKeyModeInternal(const std::shared_ptr<IO
     int         error = OT_ERROR_NONE;
     std::string message;
 
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
     otbrLogInfo("Deactivating ephemeral key mode.");
 
     VerifyOrExit(otBorderAgentEphemeralKeyGetState(GetOtInstance()) != OT_BORDER_AGENT_STATE_DISABLED &&
@@ -791,16 +799,17 @@ exit:
 
 Status OtDaemonServer::registerStateCallback(const std::shared_ptr<IOtDaemonCallback> &aCallback, int64_t aListenerId)
 {
+    VerifyOrExit(mHost.IsInitialized());
+
     mTaskRunner.Post([aCallback, aListenerId, this]() { registerStateCallbackInternal(aCallback, aListenerId); });
 
+exit:
     return Status::ok();
 }
 
 void OtDaemonServer::registerStateCallbackInternal(const std::shared_ptr<IOtDaemonCallback> &aCallback,
                                                    int64_t                                   aListenerId)
 {
-    VerifyOrExit(GetOtInstance() != nullptr, otbrLogWarning("OT is not initialized"));
-
     mCallback = aCallback;
     if (mCallback != nullptr)
     {
@@ -897,8 +906,11 @@ exit:
 Status OtDaemonServer::join(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
                             const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aActiveOpDatasetTlvs, aReceiver, this]() { joinInternal(aActiveOpDatasetTlvs, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -917,8 +929,6 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
                  message = "Thread is disabled");
 
     otbrLogInfo("Start joining...");
-
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
 
     std::copy(aActiveOpDatasetTlvs.begin(), aActiveOpDatasetTlvs.end(), newDatasetTlvs.mTlvs);
     newDatasetTlvs.mLength = static_cast<uint8_t>(aActiveOpDatasetTlvs.size());
@@ -969,28 +979,22 @@ exit:
 
 Status OtDaemonServer::leave(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aEraseDataset, aReceiver, this]() { leaveInternal(aEraseDataset, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
 void OtDaemonServer::leaveInternal(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
-    if (GetOtInstance() == nullptr)
-    {
-        PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver);
-    }
-    else
-    {
-        LeaveGracefully(aEraseDataset, "leave", [aReceiver]() { PropagateResult(OT_ERROR_NONE, "", aReceiver); });
-    }
+    LeaveGracefully(aEraseDataset, "leave", [aReceiver]() { PropagateResult(OT_ERROR_NONE, "", aReceiver); });
 }
 
 void OtDaemonServer::LeaveGracefully(bool aEraseDataset, const std::string &aCallerTag, const LeaveCallback &aCallback)
 {
     otOperationalDatasetTlvs curDatasetTlvs;
-
-    VerifyOrDie(GetOtInstance() != nullptr, "OT is not initialized");
 
     if (otThreadGetDeviceRole(GetOtInstance()) != OT_DEVICE_ROLE_DISABLED)
     {
@@ -1088,9 +1092,12 @@ bool OtDaemonServer::isAttached()
 Status OtDaemonServer::scheduleMigration(const std::vector<uint8_t>               &aPendingOpDatasetTlvs,
                                          const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post(
         [aPendingOpDatasetTlvs, aReceiver, this]() { scheduleMigrationInternal(aPendingOpDatasetTlvs, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -1156,8 +1163,11 @@ void OtDaemonServer::SendMgmtPendingSetCallback(otError aResult, void *aBinderSe
 Status OtDaemonServer::setCountryCode(const std::string                        &aCountryCode,
                                       const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aCountryCode, aReceiver, this]() { setCountryCodeInternal(aCountryCode, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -1176,8 +1186,11 @@ void OtDaemonServer::setCountryCodeInternal(const std::string                   
 
 Status OtDaemonServer::getChannelMasks(const std::shared_ptr<IChannelMasksReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), aReceiver->onError(OT_ERROR_INVALID_STATE, "OT is not initialized"));
+
     mTaskRunner.Post([aReceiver, this]() { getChannelMasksInternal(aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -1195,9 +1208,12 @@ void OtDaemonServer::getChannelMasksInternal(const std::shared_ptr<IChannelMasks
 Status OtDaemonServer::setChannelMaxPowers(const std::vector<ChannelMaxPower>       &aChannelMaxPowers,
                                            const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post(
         [aChannelMaxPowers, aReceiver, this]() { setChannelMaxPowersInternal(aChannelMaxPowers, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -1228,6 +1244,8 @@ Status OtDaemonServer::setChannelMaxPowersInternal(const std::vector<ChannelMaxP
 Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration              &aConfiguration,
                                         const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aConfiguration, aReceiver, this]() {
         if (aConfiguration != mAndroidHost->GetConfiguration())
         {
@@ -1237,6 +1255,7 @@ Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration             
         }
     });
 
+exit:
     return Status::ok();
 }
 
@@ -1246,10 +1265,13 @@ Status OtDaemonServer::setInfraLinkInterfaceName(const std::optional<std::string
 {
     int icmp6Socket = aIcmp6Socket.dup().release();
 
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([interfaceName = aInterfaceName.value_or(""), icmp6Socket, aReceiver, this]() {
         mAndroidHost->SetInfraLinkInterfaceName(interfaceName, icmp6Socket, aReceiver);
     });
 
+exit:
     return Status::ok();
 }
 
@@ -1257,20 +1279,26 @@ Status OtDaemonServer::runOtCtlCommand(const std::string                        
                                        const bool                                aIsInteractive,
                                        const std::shared_ptr<IOtOutputReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), aReceiver->onError(OT_ERROR_INVALID_STATE, "OT is not initialized"));
+
     mTaskRunner.Post([aCommand, aIsInteractive, aReceiver, this]() {
         runOtCtlCommandInternal(aCommand, aIsInteractive, aReceiver);
     });
 
+exit:
     return Status::ok();
 }
 
 Status OtDaemonServer::setInfraLinkNat64Prefix(const std::optional<std::string>         &aNat64Prefix,
                                                const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([nat64Prefix = aNat64Prefix.value_or(""), aReceiver, this]() {
         mAndroidHost->SetInfraLinkNat64Prefix(nat64Prefix, aReceiver);
     });
 
+exit:
     return Status::ok();
 }
 
@@ -1284,15 +1312,24 @@ void OtDaemonServer::runOtCtlCommandInternal(const std::string                  
 Status OtDaemonServer::setInfraLinkDnsServers(const std::vector<std::string>           &aDnsServers,
                                               const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post(
         [aDnsServers, aReceiver, this]() { mAndroidHost->SetInfraLinkDnsServers(aDnsServers, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
 binder_status_t OtDaemonServer::dump(int aFd, const char **aArgs, uint32_t aNumArgs)
 {
-    return mAndroidHost->Dump(aFd, aArgs, aNumArgs);
+    binder_status_t status = STATUS_OK;
+
+    VerifyOrExit(mHost.IsInitialized());
+    status = mAndroidHost->Dump(aFd, aArgs, aNumArgs);
+
+exit:
+    return status;
 }
 
 void OtDaemonServer::PushTelemetryIfConditionMatch()
@@ -1311,8 +1348,11 @@ exit:
 Status OtDaemonServer::setNat64Cidr(const std::optional<std::string>         &aCidr,
                                     const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
+
     mTaskRunner.Post([aCidr, aReceiver, this]() { setNat64CidrInternal(aCidr, aReceiver); });
 
+exit:
     return Status::ok();
 }
 
@@ -1321,8 +1361,6 @@ void OtDaemonServer::setNat64CidrInternal(const std::optional<std::string>      
 {
     otError     error = OT_ERROR_NONE;
     std::string message;
-
-    VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
 
     if (aCidr.has_value())
     {

@@ -820,7 +820,10 @@ void OtDaemonServer::registerStateCallbackInternal(const std::shared_ptr<IOtDaem
     // state callback, here needs to invoke the callback
     RefreshOtDaemonState(/* aFlags */ 0xffffffff);
     NotifyStateChanged(aListenerId);
-    mCallback->onBackboneRouterStateChanged(GetBackboneRouterState());
+    if (mCallback != nullptr)
+    {
+        mCallback->onBackboneRouterStateChanged(GetBackboneRouterState());
+    }
 
 exit:
     return;

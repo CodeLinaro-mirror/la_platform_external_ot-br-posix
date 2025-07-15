@@ -115,6 +115,7 @@ OtDaemonServer::OtDaemonServer(otbr::Host::RcpHost    &aRcpHost,
     , mBorderAgent(aBorderAgent)
     , mAdvProxy(aAdvProxy)
     , mResetThreadHandler(aResetThreadHandler)
+    , mServiceRegistered(false)
 {
     mClientDeathRecipient =
         ::ndk::ScopedAIBinder_DeathRecipient(AIBinder_DeathRecipient_new(&OtDaemonServer::BinderDeathCallback));
@@ -123,8 +124,12 @@ OtDaemonServer::OtDaemonServer(otbr::Host::RcpHost    &aRcpHost,
 
 void OtDaemonServer::Init(void)
 {
-    binder_exception_t exp = AServiceManager_registerLazyService(asBinder().get(), OTBR_SERVICE_NAME);
-    SuccessOrDie(exp, "Failed to register OT daemon binder service");
+    if (!mServiceRegistered)
+    {
+        binder_exception_t exp = AServiceManager_registerLazyService(asBinder().get(), OTBR_SERVICE_NAME);
+        SuccessOrDie(exp, "Failed to register OT daemon binder service");
+        mServiceRegistered = true;
+    }
 
     assert(GetOtInstance() != nullptr);
 

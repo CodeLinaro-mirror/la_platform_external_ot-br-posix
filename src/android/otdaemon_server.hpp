@@ -207,6 +207,7 @@ private:
     bool                               mTrelEnabled = false;
     std::shared_ptr<IOtDaemonCallback> mCallback;
     BinderDeathRecipient               mClientDeathRecipient;
+    bool                               mServiceRegistered;
 
     // Runtime states
     std::shared_ptr<IOtStatusReceiver> mJoinReceiver;

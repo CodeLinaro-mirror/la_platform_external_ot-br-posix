@@ -314,11 +314,12 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
     DumpCliCommand("eidcache", aFd);
     DumpCliCommand("netstat", aFd);
 
-    DumpCliCommand("ccathreshold", aFd);
-    DumpCliCommand("coex metrics", aFd);
+    // TODO: b/420532044 - Add back the commands once the dump mechanism is fixed
+    // DumpCliCommand("ccathreshold", aFd);
+    // DumpCliCommand("coex metrics", aFd);
     DumpCliCommand("csl", aFd);
-    DumpCliCommand("csl accuracy", aFd);
-    DumpCliCommand("csl uncertainty", aFd);
+    // DumpCliCommand("csl accuracy", aFd);
+    // DumpCliCommand("csl uncertainty", aFd);
     DumpCliCommand("linkmetricsmgr show", aFd);
     DumpCliCommand("multiradio", aFd);
     DumpCliCommand("multiradio neighbor list", aFd);

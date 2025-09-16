@@ -111,10 +111,11 @@ private:
     void   registerStateCallbackInternal(const std::shared_ptr<IOtDaemonCallback> &aCallback, int64_t aListenerId);
     bool   isAttached(void);
     Status join(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+                bool                                      aCreatePartitionIfNotFound,
                 const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
-    void   joinInternal(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+    void   joinInternal(const otOperationalDatasetTlvs           &aActiveOpDatasetTlvs,
+                        bool                                      aCreatePartitionIfNotFound,
                         const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-
     Status leave(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
     void   leaveInternal(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
     void   LeaveGracefully(bool aEraseDataset, const std::string &aCallerTag, const LeaveCallback &aReceiver);

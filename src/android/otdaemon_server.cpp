@@ -911,22 +911,30 @@ exit:
 }
 
 Status OtDaemonServer::join(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+                            bool                                      aCreatePartitionIfNotFound,
                             const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    otOperationalDatasetTlvs otDatasetTlvs;
+
     VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
 
-    mTaskRunner.Post([aActiveOpDatasetTlvs, aReceiver, this]() { joinInternal(aActiveOpDatasetTlvs, aReceiver); });
+    std::copy(aActiveOpDatasetTlvs.begin(), aActiveOpDatasetTlvs.end(), otDatasetTlvs.mTlvs);
+    otDatasetTlvs.mLength = static_cast<uint8_t>(aActiveOpDatasetTlvs.size());
+
+    mTaskRunner.Post([otDatasetTlvs, aCreatePartitionIfNotFound, aReceiver, this]() {
+        joinInternal(otDatasetTlvs, aCreatePartitionIfNotFound, aReceiver);
+    });
 
 exit:
     return Status::ok();
 }
 
-void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+void OtDaemonServer::joinInternal(const otOperationalDatasetTlvs           &aNewDatasetTlvs,
+                                  bool                                      aCreatePartitionIfNotFound,
                                   const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
     int                      error = OT_ERROR_NONE;
     std::string              message;
-    otOperationalDatasetTlvs newDatasetTlvs;
     otOperationalDatasetTlvs curDatasetTlvs;
 
     VerifyOrExit(mState.threadEnabled != OT_STATE_DISABLING, error = OT_ERROR_BUSY, message = "Thread is disabling");
@@ -937,11 +945,11 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
 
     otbrLogInfo("Start joining...");
 
-    std::copy(aActiveOpDatasetTlvs.begin(), aActiveOpDatasetTlvs.end(), newDatasetTlvs.mTlvs);
-    newDatasetTlvs.mLength = static_cast<uint8_t>(aActiveOpDatasetTlvs.size());
+    SuccessOrExit(
+        error = otThreadSetLinkMode(GetOtInstance(), AndroidRcpHost::GetLinkModeConfig(aCreatePartitionIfNotFound)));
 
     error = otDatasetGetActiveTlvs(GetOtInstance(), &curDatasetTlvs);
-    if (error == OT_ERROR_NONE && areDatasetsEqual(newDatasetTlvs, curDatasetTlvs) && isAttached())
+    if (error == OT_ERROR_NONE && areDatasetsEqual(aNewDatasetTlvs, curDatasetTlvs) && isAttached())
     {
         // Do not leave and re-join if this device has already joined the same network.
         // This can help elimilate unnecessary connectivity and topology disruption and
@@ -954,17 +962,17 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
     // If this device has ever joined a different network, try to leave from previous
     // network first. Do this even this device role is detached or disabled, this is for
     // clearing any in-memory state of the previous network.
-    if (error == OT_ERROR_NONE && !areDatasetsEqual(newDatasetTlvs, curDatasetTlvs))
+    if (error == OT_ERROR_NONE && !areDatasetsEqual(aNewDatasetTlvs, curDatasetTlvs))
     {
         LeaveGracefully(true /* aEraseDataset */, "join",
-                        [aActiveOpDatasetTlvs, aReceiver, this]() { join(aActiveOpDatasetTlvs, aReceiver); });
+                        [aNewDatasetTlvs, aCreatePartitionIfNotFound, aReceiver, this]() {
+                            joinInternal(aNewDatasetTlvs, aCreatePartitionIfNotFound, aReceiver);
+                        });
         ExitNow();
     }
 
-    SuccessOrExit(error   = otDatasetSetActiveTlvs(GetOtInstance(), &newDatasetTlvs),
+    SuccessOrExit(error   = otDatasetSetActiveTlvs(GetOtInstance(), &aNewDatasetTlvs),
                   message = "Failed to set Active Operational Dataset");
-
-    // TODO(b/273160198): check how we can implement join as a child
 
     // Shouldn't we have an equivalent `otThreadAttach` method vs `otThreadDetachGracefully`?
     SuccessOrExit(error = otIp6SetEnabled(GetOtInstance(), true), message = "Failed to bring up Thread interface");

@@ -64,13 +64,14 @@ public:
     void                   NotifyNat64PrefixDiscoveryDone(void);
     static AndroidRcpHost *Get(void) { return sAndroidRcpHost; }
 
+    static otLinkModeConfig GetLinkModeConfig(bool aBeRouter);
+
 private:
     otInstance *GetOtInstance(void);
 
-    static otLinkModeConfig GetLinkModeConfig(bool aBeRouter);
-    void                    SetBorderRouterEnabled(bool aEnabled);
-    static int              OtCtlCommandCallback(void *aBinderServer, const char *aFormat, va_list aArguments);
-    int                     OtCtlCommandCallback(const char *aFormat, va_list aArguments);
+    void       SetBorderRouterEnabled(bool aEnabled);
+    static int OtCtlCommandCallback(void *aBinderServer, const char *aFormat, va_list aArguments);
+    int        OtCtlCommandCallback(const char *aFormat, va_list aArguments);
 
     static AndroidRcpHost *sAndroidRcpHost;
 

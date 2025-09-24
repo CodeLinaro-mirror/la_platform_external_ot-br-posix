@@ -70,6 +70,7 @@ private:
     otInstance *GetOtInstance(void);
 
     void       SetBorderRouterEnabled(bool aEnabled);
+    bool       IsInfraLinkInterfaceReady(void);
     static int OtCtlCommandCallback(void *aBinderServer, const char *aFormat, va_list aArguments);
     int        OtCtlCommandCallback(const char *aFormat, va_list aArguments);
 

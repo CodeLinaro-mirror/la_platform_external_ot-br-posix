@@ -214,12 +214,14 @@ cc_defaults {
 
     shared_libs: [
         "libbase",
+        "liblog",
         "libutils",
         "libcutils",
         "libbinder_ndk",
         "android.hardware.threadnetwork-V1-ndk",
         "liblog",
         "libstatssocket",
+        "libthreadflags",
     ],
 
     static_libs: [

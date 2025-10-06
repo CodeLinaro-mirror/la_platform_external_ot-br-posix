@@ -153,7 +153,7 @@ private:
     void   getChannelMasksInternal(const std::shared_ptr<IChannelMasksReceiver> &aReceiver);
     Status runOtCtlCommand(const std::string                        &aCommand,
                            const bool                                aIsInteractive,
-                           const std::shared_ptr<IOtOutputReceiver> &aReceiver);
+                           const std::shared_ptr<IOtOutputReceiver> &aReceiver) override;
     void   runOtCtlCommandInternal(const std::string                        &aCommand,
                                    const bool                                aIsInteractive,
                                    const std::shared_ptr<IOtOutputReceiver> &aReceiver);

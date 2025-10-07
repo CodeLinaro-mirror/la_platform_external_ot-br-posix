@@ -115,6 +115,7 @@ OtDaemonServer::OtDaemonServer(otbr::Host::RcpHost    &aRcpHost,
     , mBorderAgent(aBorderAgent)
     , mAdvProxy(aAdvProxy)
     , mResetThreadHandler(aResetThreadHandler)
+    , mServiceRegistered(false)
 {
     mClientDeathRecipient =
         ::ndk::ScopedAIBinder_DeathRecipient(AIBinder_DeathRecipient_new(&OtDaemonServer::BinderDeathCallback));
@@ -123,8 +124,12 @@ OtDaemonServer::OtDaemonServer(otbr::Host::RcpHost    &aRcpHost,
 
 void OtDaemonServer::Init(void)
 {
-    binder_exception_t exp = AServiceManager_registerLazyService(asBinder().get(), OTBR_SERVICE_NAME);
-    SuccessOrDie(exp, "Failed to register OT daemon binder service");
+    if (!mServiceRegistered)
+    {
+        binder_exception_t exp = AServiceManager_registerLazyService(asBinder().get(), OTBR_SERVICE_NAME);
+        SuccessOrDie(exp, "Failed to register OT daemon binder service");
+        mServiceRegistered = true;
+    }
 
     assert(GetOtInstance() != nullptr);
 
@@ -133,7 +138,6 @@ void OtDaemonServer::Init(void)
     otIp6SetReceiveCallback(GetOtInstance(), OtDaemonServer::ReceiveCallback, this);
     otBackboneRouterSetMulticastListenerCallback(GetOtInstance(), OtDaemonServer::HandleBackboneMulticastListenerEvent,
                                                  this);
-    otIcmp6SetEchoMode(GetOtInstance(), OT_ICMP6_ECHO_HANDLER_DISABLED);
     otIp6SetReceiveFilterEnabled(GetOtInstance(), true);
     otNat64SetReceiveIp4Callback(GetOtInstance(), &OtDaemonServer::ReceiveCallback, this);
     mHost.AddEphemeralKeyStateChangedCallback([this](otBorderAgentEphemeralKeyState aEpskcState, uint16_t aPort) {
@@ -820,7 +824,10 @@ void OtDaemonServer::registerStateCallbackInternal(const std::shared_ptr<IOtDaem
     // state callback, here needs to invoke the callback
     RefreshOtDaemonState(/* aFlags */ 0xffffffff);
     NotifyStateChanged(aListenerId);
-    mCallback->onBackboneRouterStateChanged(GetBackboneRouterState());
+    if (mCallback != nullptr)
+    {
+        mCallback->onBackboneRouterStateChanged(GetBackboneRouterState());
+    }
 
 exit:
     return;

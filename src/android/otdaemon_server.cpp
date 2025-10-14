@@ -75,7 +75,7 @@ std::shared_ptr<VendorServer> VendorServer::newInstance(Application &aApplicatio
         static_cast<otbr::Android::MdnsPublisher &>(aApplication.GetPublisher()), aApplication.GetBorderAgent(),
         aApplication.GetAdvertisingProxy(), [&aApplication]() {
             aApplication.Deinit();
-            aApplication.Init();
+            aApplication.Init(/* aRestListenAddress */"", /* aRestListenPort */0);
         });
 }
 

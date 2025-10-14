@@ -37,7 +37,7 @@
 #include "openthread-br/config.h"
 
 #ifndef OTBR_ENABLE_MDNS
-#define OTBR_ENABLE_MDNS (OTBR_ENABLE_MDNS_AVAHI || OTBR_ENABLE_MDNS_MDNSSD)
+#define OTBR_ENABLE_MDNS (OTBR_ENABLE_MDNS_AVAHI || OTBR_ENABLE_MDNS_MDNSSD || OTBR_ENABLE_MDNS_OPENTHREAD)
 #endif
 
 #include <functional>
@@ -123,6 +123,8 @@ public:
     typedef std::vector<Ip6Address>  AddressList;
     typedef std::vector<uint8_t>     KeyData;
 
+#if !OTBR_ENABLE_MDNS_OPENTHREAD
+
     /**
      * This structure represents information of a discovered service instance.
      */
@@ -169,6 +171,11 @@ public:
     using DiscoveredHostCallback =
         std::function<void(const std::string &aHostName, const DiscoveredHostInfo &aHostInfo)>;
 
+    /** The callback for receiving the result of a operation. */
+    using ResultCallback = OnceCallback<void(otbrError aError)>;
+
+#endif // !OTBR_ENABLE_MDNS_OPENTHREAD
+
     /**
      * mDNS state values.
      */
@@ -180,9 +187,6 @@ public:
 
     /** The callback for receiving mDNS publisher state changes. */
     using StateCallback = std::function<void(State aNewState)>;
-
-    /** The callback for receiving the result of a operation. */
-    using ResultCallback = OnceCallback<void(otbrError aError)>;
 
     /**
      * This method starts the mDNS publisher.
@@ -196,6 +200,8 @@ public:
      * This method stops the mDNS publisher.
      */
     virtual void Stop(void) = 0;
+
+#if !OTBR_ENABLE_MDNS_OPENTHREAD
 
     /**
      * This method checks if publisher has been started.
@@ -352,6 +358,8 @@ public:
      */
     void RemoveSubscriptionCallbacks(uint64_t aSubscriberId);
 
+#endif // !OTBR_ENABLE_MDNS_OPENTHREAD
+
     /**
      * This method returns the mDNS statistics information of the publisher.
      *
@@ -413,6 +421,8 @@ public:
 
 protected:
     static constexpr uint8_t kMaxTextEntrySize = 255;
+
+#if !OTBR_ENABLE_MDNS_OPENTHREAD
 
     class Registration
     {
@@ -534,11 +544,11 @@ protected:
         void OnComplete(otbrError aError);
     };
 
-    using ServiceRegistrationPtr = std::unique_ptr<ServiceRegistration>;
+    using ServiceRegistrationPtr = std::shared_ptr<ServiceRegistration>;
     using ServiceRegistrationMap = std::map<std::string, ServiceRegistrationPtr>;
-    using HostRegistrationPtr    = std::unique_ptr<HostRegistration>;
+    using HostRegistrationPtr    = std::shared_ptr<HostRegistration>;
     using HostRegistrationMap    = std::map<std::string, HostRegistrationPtr>;
-    using KeyRegistrationPtr     = std::unique_ptr<KeyRegistration>;
+    using KeyRegistrationPtr     = std::shared_ptr<KeyRegistration>;
     using KeyRegistrationMap     = std::map<std::string, KeyRegistrationPtr>;
 
     static SubTypeList SortSubTypeList(SubTypeList aSubTypeList);
@@ -570,7 +580,7 @@ protected:
 
     virtual otbrError DnsErrorToOtbrError(int32_t aError) = 0;
 
-    void AddServiceRegistration(ServiceRegistrationPtr &&aServiceReg);
+    void AddServiceRegistration(ServiceRegistrationPtr aServiceReg);
     void RemoveServiceRegistration(const std::string &aName, const std::string &aType, otbrError aError);
     ServiceRegistration *FindServiceRegistration(const std::string &aName, const std::string &aType);
     ServiceRegistration *FindServiceRegistration(const std::string &aNameAndType);
@@ -600,11 +610,11 @@ protected:
                                                   const KeyData     &aKeyData,
                                                   ResultCallback   &&aCallback);
 
-    void              AddHostRegistration(HostRegistrationPtr &&aHostReg);
+    void              AddHostRegistration(HostRegistrationPtr aHostReg);
     void              RemoveHostRegistration(const std::string &aName, otbrError aError);
     HostRegistration *FindHostRegistration(const std::string &aName);
 
-    void             AddKeyRegistration(KeyRegistrationPtr &&aKeyReg);
+    void             AddKeyRegistration(KeyRegistrationPtr aKeyReg);
     void             RemoveKeyRegistration(const std::string &aName, otbrError aError);
     KeyRegistration *FindKeyRegistration(const std::string &aName);
     KeyRegistration *FindKeyRegistration(const std::string &aName, const std::string &aType);
@@ -661,6 +671,8 @@ protected:
     std::map<std::pair<std::string, std::string>, Timepoint> mServiceInstanceResolutionBeginTime;
     // host name -> the timepoint to begin host resolution
     std::map<std::string, Timepoint> mHostResolutionBeginTime;
+
+#endif // !OTBR_ENABLE_MDNS_OPENTHREAD
 
     MdnsTelemetryInfo mTelemetryInfo{};
 };

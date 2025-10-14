@@ -30,6 +30,7 @@
 #include <sstream>
 #include <sys/socket.h>
 
+#include "common/byteswap.hpp"
 #include "common/code_utils.hpp"
 #include "common/logging.hpp"
 #include "common/types.hpp"
@@ -65,6 +66,16 @@ Ip6Address Ip6Address::ToSolicitedNodeMulticastAddress(void) const
     ma.m8[15] = m8[15];
 
     return ma;
+}
+
+bool Ip6Address::IsLinkLocal(void) const
+{
+    return (m16[0] & bswap_16(0xffc0)) == bswap_16(0xfe80);
+}
+
+bool Ip6Address::IsLoopback(void) const
+{
+    return (m32[0] == 0 && m32[1] == 0 && m32[2] == 0 && m32[3] == htobe32(1));
 }
 
 uint8_t Ip6Address::GetScope(void) const
@@ -113,6 +124,11 @@ void Ip6Address::CopyFrom(const struct in6_addr &aIn6Addr)
 {
     static_assert(sizeof(m8) == sizeof(aIn6Addr.s6_addr), "invalid IPv6 address size");
     memcpy(m8, aIn6Addr.s6_addr, sizeof(aIn6Addr.s6_addr));
+}
+
+void Ip6Address::CopyTo(otIp6Address &aAddress) const
+{
+    memcpy(aAddress.mFields.m8, m8, sizeof(aAddress.mFields.m8));
 }
 
 otbrError Ip6Address::FromString(const char *aStr, Ip6Address &aAddr)

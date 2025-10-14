@@ -574,6 +574,11 @@ ClientError ThreadApiDBus::GetExtendedAddress(uint64_t &aExtendedAddress)
     return GetProperty(OTBR_DBUS_PROPERTY_EXTENDED_ADDRESS, aExtendedAddress);
 }
 
+ClientError ThreadApiDBus::GetBorderAgentId(std::vector<uint8_t> &aBorderAgentId)
+{
+    return GetProperty(OTBR_DBUS_PROPERTY_BORDER_AGENT_ID, aBorderAgentId);
+}
+
 ClientError ThreadApiDBus::GetRouterId(uint8_t &aRouterId)
 {
     return GetProperty(OTBR_DBUS_PROPERTY_ROUTER_ID, aRouterId);
@@ -881,6 +886,11 @@ ClientError ThreadApiDBus::AttachAllNodesTo(const std::vector<uint8_t> &aDataset
 {
     auto args = std::tie(aDataset);
     return CallDBusMethodSync(OTBR_DBUS_ATTACH_ALL_NODES_TO_METHOD, args);
+}
+
+ClientError ThreadApiDBus::SetBorderAgentEnabled(bool aEnabled)
+{
+    return CallDBusMethodSync(OTBR_DBUS_SET_BORDER_AGENT_ENABLED_METHOD, std::tie(aEnabled));
 }
 
 ClientError ThreadApiDBus::UpdateVendorMeshCopTxtEntries(std::vector<TxtEntry> &aUpdate)

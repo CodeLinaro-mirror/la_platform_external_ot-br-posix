@@ -58,6 +58,10 @@ parcelable OtDaemonConfiguration {
     /** The vendor name which will be set to the Vendor Name TLV for diagnostic. */
     String vendorName;
 
+    /** vendor software version which will be set to the Vendor SW Version TLV for diagnostic. */
+    String vendorSwVersion;
+
     /** The model name which will be set to the Vendor Model TLV for diagnostic. */
     String modelName;
+
 }

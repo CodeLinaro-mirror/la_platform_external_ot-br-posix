@@ -81,6 +81,8 @@ void AndroidRcpHost::SetConfiguration(const OtDaemonConfiguration              &
 
     SuccessOrExit(error   = otThreadSetVendorName(GetOtInstance(), aConfiguration.vendorName.c_str()),
                   message = "Invalid vendor name " + aConfiguration.vendorName);
+    SuccessOrExit(error   = otThreadSetVendorSwVersion(GetOtInstance(), aConfiguration.vendorSwVersion.c_str()),
+                  message = "Invalid vendor software version " + aConfiguration.vendorSwVersion);
     SuccessOrExit(error   = otThreadSetVendorModel(GetOtInstance(), aConfiguration.modelName.c_str()),
                   message = "Invalid model name " + aConfiguration.modelName);
 

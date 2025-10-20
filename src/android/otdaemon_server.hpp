@@ -111,10 +111,11 @@ private:
     void   registerStateCallbackInternal(const std::shared_ptr<IOtDaemonCallback> &aCallback, int64_t aListenerId);
     bool   isAttached(void);
     Status join(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+                bool                                      aCreatePartitionIfNotFound,
                 const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
-    void   joinInternal(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+    void   joinInternal(const otOperationalDatasetTlvs           &aActiveOpDatasetTlvs,
+                        bool                                      aCreatePartitionIfNotFound,
                         const std::shared_ptr<IOtStatusReceiver> &aReceiver);
-
     Status leave(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver) override;
     void   leaveInternal(bool aEraseDataset, const std::shared_ptr<IOtStatusReceiver> &aReceiver);
     void   LeaveGracefully(bool aEraseDataset, const std::string &aCallerTag, const LeaveCallback &aReceiver);
@@ -152,7 +153,7 @@ private:
     void   getChannelMasksInternal(const std::shared_ptr<IChannelMasksReceiver> &aReceiver);
     Status runOtCtlCommand(const std::string                        &aCommand,
                            const bool                                aIsInteractive,
-                           const std::shared_ptr<IOtOutputReceiver> &aReceiver);
+                           const std::shared_ptr<IOtOutputReceiver> &aReceiver) override;
     void   runOtCtlCommandInternal(const std::string                        &aCommand,
                                    const bool                                aIsInteractive,
                                    const std::shared_ptr<IOtOutputReceiver> &aReceiver);

@@ -44,19 +44,20 @@ jobs:
   build-check:
     runs-on: macos-14
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         submodules: true
     - name: Bootstrap
       run: |
         brew update
-        brew reinstall jsoncpp ninja protobuf@21
+        brew reinstall jsoncpp ninja protobuf@21 googletest
     - name: Build
       run: |
         OTBR_OPTIONS="-DOTBR_BORDER_AGENT=OFF \
+                      -DOTBR_BACKBONE_ROUTER=OFF \
                       -DOTBR_MDNS=OFF \
-                      -DOTBR_SRP_ADVERTISING_PROXY=OFF \
-                      -DOTBR_DNSSD_DISCOVERY_PROXY=OFF \
                       -DOTBR_TREL=OFF \
+                      -DOTBR_NAT64=OFF \
+                      -DOTBR_DNS_UPSTREAM_QUERY=OFF \
                       -DOT_FIREWALL=OFF \
                       -DOTBR_DBUS=OFF" ./script/test build

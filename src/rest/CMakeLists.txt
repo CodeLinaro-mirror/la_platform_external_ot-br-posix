@@ -27,22 +27,38 @@
 #
 
 add_library(otbr-rest
-    rest_web_server.cpp
-    connection.cpp
-    resource.cpp
+    actions/action.cpp
+    actions/add_thread_device.cpp
+    actions/discover_network.cpp
+    actions/energy_scan.cpp
+    actions/handler.cpp
+    actions/network_diagnostic.cpp
+    actions/reset_diagnostic_counters.cpp
+    actions_list.cpp
+    commissioner_manager.cpp
+    diagnostic_types.cpp
     json.cpp
-    parser.cpp
-    request.cpp
-    response.cpp
+    network_diag_handler.cpp
+    rest_devices_coll.cpp
+    rest_diagnostics_coll.cpp
+    rest_generic_collection.cpp
+    rest_server_common.cpp
+    rest_web_server.cpp
+    services.cpp
+    timestamp.cpp
+    uuid.cpp
+)
+
+target_include_directories(otbr-rest PUBLIC
+    ${PROJECT_SOURCE_DIR}/third_party/cpp-httplib/repo
 )
 
 target_link_libraries(otbr-rest
-    PUBLIC
-        http_parser
     PRIVATE
         cjson
         otbr-config
         otbr-utils
         openthread-ftd
         openthread-posix
+        pthread
 )

@@ -288,7 +288,9 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     }
 
     @Override
-    public void join(byte[] activeDataset, IOtStatusReceiver receiver) throws RemoteException {
+    public void join(
+            byte[] activeDataset, boolean createPartitionIfNotFound, IOtStatusReceiver receiver)
+            throws RemoteException {
         if (mJoinException != null) {
             throw mJoinException;
         }

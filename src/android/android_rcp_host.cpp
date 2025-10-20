@@ -81,6 +81,8 @@ void AndroidRcpHost::SetConfiguration(const OtDaemonConfiguration              &
 
     SuccessOrExit(error   = otThreadSetVendorName(GetOtInstance(), aConfiguration.vendorName.c_str()),
                   message = "Invalid vendor name " + aConfiguration.vendorName);
+    SuccessOrExit(error   = otThreadSetVendorSwVersion(GetOtInstance(), aConfiguration.vendorSwVersion.c_str()),
+                  message = "Invalid vendor software version " + aConfiguration.vendorSwVersion);
     SuccessOrExit(error   = otThreadSetVendorModel(GetOtInstance(), aConfiguration.modelName.c_str()),
                   message = "Invalid model name " + aConfiguration.modelName);
 
@@ -138,32 +140,26 @@ void AndroidRcpHost::SetInfraLinkInterfaceName(const std::string                
     otbrLogInfo("Setting infra link state: %s", aInterfaceName.c_str());
 
     VerifyOrExit(GetOtInstance() != nullptr, error = OT_ERROR_INVALID_STATE, message = "OT is not initialized");
-    VerifyOrExit(mConfiguration.borderRouterEnabled, error = OT_ERROR_INVALID_STATE,
-                 message = "Set infra link state when border router is disabled");
     VerifyOrExit(mInfraLinkState.interfaceName != aInterfaceName || aIcmp6Socket != mInfraIcmp6Socket);
-
-    if (infraIfIndex != 0 && aIcmp6Socket > 0)
-    {
-        SuccessOrExit(error   = otBorderRoutingSetEnabled(GetOtInstance(), false /* aEnabled */),
-                      message = "failed to disable border routing");
-        otSysSetInfraNetif(infraIfName.c_str(), aIcmp6Socket);
-        aIcmp6Socket = -1;
-        SuccessOrExit(error   = otBorderRoutingInit(GetOtInstance(), infraIfIndex, otSysInfraIfIsRunning()),
-                      message = "failed to initialize border routing");
-        SuccessOrExit(error   = otBorderRoutingSetEnabled(GetOtInstance(), true /* aEnabled */),
-                      message = "failed to enable border routing");
-        // TODO: b/320836258 - Make BBR independently configurable
-        otBackboneRouterSetEnabled(GetOtInstance(), true /* aEnabled */);
-    }
-    else
-    {
-        SuccessOrExit(error   = otBorderRoutingSetEnabled(GetOtInstance(), false /* aEnabled */),
-                      message = "failed to disable border routing");
-        otBackboneRouterSetEnabled(GetOtInstance(), false /* aEnabled */);
-    }
 
     mInfraLinkState.interfaceName = aInterfaceName;
     mInfraIcmp6Socket             = aIcmp6Socket;
+
+    SetBorderRouterEnabled(false);
+
+    if (IsInfraLinkInterfaceReady())
+    {
+        otSysSetInfraNetif(infraIfName.c_str(), aIcmp6Socket);
+
+        SuccessOrExit(error   = otBorderRoutingInit(GetOtInstance(), infraIfIndex, otSysInfraIfIsRunning()),
+                      message = "failed to initialize border routing");
+
+    }
+
+    if (mConfiguration.borderRouterEnabled)
+    {
+        SetBorderRouterEnabled(true);
+    }
 
     SetTrelEnabled(mTrelEnabled);
 
@@ -314,11 +310,12 @@ binder_status_t AndroidRcpHost::Dump(int aFd, const char **aArgs, uint32_t aNumA
     DumpCliCommand("eidcache", aFd);
     DumpCliCommand("netstat", aFd);
 
-    DumpCliCommand("ccathreshold", aFd);
-    DumpCliCommand("coex metrics", aFd);
+    // TODO: b/420532044 - Add back the commands once the dump mechanism is fixed
+    // DumpCliCommand("ccathreshold", aFd);
+    // DumpCliCommand("coex metrics", aFd);
     DumpCliCommand("csl", aFd);
-    DumpCliCommand("csl accuracy", aFd);
-    DumpCliCommand("csl uncertainty", aFd);
+    // DumpCliCommand("csl accuracy", aFd);
+    // DumpCliCommand("csl uncertainty", aFd);
     DumpCliCommand("linkmetricsmgr show", aFd);
     DumpCliCommand("multiradio", aFd);
     DumpCliCommand("multiradio neighbor list", aFd);
@@ -443,6 +440,9 @@ void AndroidRcpHost::SetBorderRouterEnabled(bool aEnabled)
 {
     otError error;
 
+    // Only enable Border Routing and BBR when infra link interface is ready.
+    VerifyOrExit(aEnabled == false || IsInfraLinkInterfaceReady());
+
     error = otBorderRoutingSetEnabled(GetOtInstance(), aEnabled);
     if (error != OT_ERROR_NONE)
     {
@@ -451,10 +451,16 @@ void AndroidRcpHost::SetBorderRouterEnabled(bool aEnabled)
         ExitNow();
     }
 
+    // TODO: b/320836258 - Make BBR independently configurable
     otBackboneRouterSetEnabled(GetOtInstance(), aEnabled);
 
 exit:
     return;
+}
+
+bool AndroidRcpHost::IsInfraLinkInterfaceReady(void)
+{
+    return mInfraLinkState.interfaceName != "" && mInfraIcmp6Socket != -1;
 }
 
 } // namespace Android

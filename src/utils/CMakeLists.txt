@@ -37,14 +37,9 @@ add_library(otbr-utils
     steering_data.cpp
     string_utils.cpp
     system_utils.cpp
-    telemetry_retriever_border_agent.cpp
-    thread_helper.cpp
-    thread_helper.hpp
 )
 
 target_link_libraries(otbr-utils PUBLIC
     otbr-common
-    $<$<BOOL:${OTBR_FEATURE_FLAGS}>:otbr-proto>
-    $<$<BOOL:${OTBR_TELEMETRY_DATA_API}>:otbr-proto>
     mbedtls
 )

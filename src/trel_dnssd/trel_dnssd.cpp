@@ -31,11 +31,11 @@
  *   This file includes implementation of TREL DNS-SD over mDNS.
  */
 
-#if OTBR_ENABLE_TREL
-
 #define OTBR_LOG_TAG "TrelDns"
 
 #include "trel_dnssd/trel_dnssd.hpp"
+
+#if OTBR_ENABLE_TREL_DNSSD
 
 #include <inttypes.h>
 #include <net/if.h>
@@ -534,4 +534,4 @@ exit:
 
 } // namespace otbr
 
-#endif // OTBR_ENABLE_TREL
+#endif // OTBR_ENABLE_TREL_DNSSD

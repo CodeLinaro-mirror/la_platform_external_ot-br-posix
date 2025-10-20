@@ -57,6 +57,8 @@ install_common_dependencies()
         net-tools \
         libavahi-common-dev \
         libavahi-client-dev \
+        libgmock-dev \
+        libgtest-dev \
         libreadline-dev \
         libncurses-dev \
         libjsoncpp-dev \
@@ -116,18 +118,23 @@ case "$(uname)" in
         fi
 
         if [ "$BUILD_TARGET" == pretty-check ]; then
-            sudo apt-get install -y clang-format-14 shellcheck
+            sudo bash "$(dirname "$0")/install-llvm.sh"
+            sudo apt-get install -y shellcheck
             sudo snap install shfmt
+            npm install prettier@2.0.4
         fi
 
         if [ "${OTBR_MDNS-}" == 'mDNSResponder' ]; then
             SOURCE_NAME=mDNSResponder-2600.100.147
-            wget https://github.com/apple-oss-distributions/mDNSResponder/archive/refs/tags/$SOURCE_NAME.tar.gz \
-                && mkdir -p $SOURCE_NAME \
-                && tar xvf $SOURCE_NAME.tar.gz -C $SOURCE_NAME --strip-components=1 \
+            (cd /tmp \
+                && wget -c --tries=3 --no-check-certificate -O "$SOURCE_NAME.tar.gz" \
+                    "https://github.com/apple-oss-distributions/mDNSResponder/archive/refs/tags/$SOURCE_NAME.tar.gz" \
+                && rm -rf "/tmp/$SOURCE_NAME" \
+                && mkdir -p "$SOURCE_NAME" \
+                && tar xvf "$SOURCE_NAME.tar.gz" -C "$SOURCE_NAME" --overwrite --strip-components=1 \
                 && cd "$SOURCE_NAME" \
                 && cd mDNSPosix \
-                && make os=linux tls=no && sudo make install os=linux tls=no
+                && make os=linux tls=no && sudo make install os=linux tls=no)
         fi
 
         # Enable IPv6
@@ -142,7 +149,7 @@ case "$(uname)" in
 
         # Prepare Raspbian image
         if [ "$BUILD_TARGET" == raspbian-gcc ]; then
-            sudo apt-get install --no-install-recommends --allow-unauthenticated -y qemu qemu-user-static binfmt-support parted
+            sudo apt-get install --no-install-recommends --allow-unauthenticated -y qemu-system qemu-user-static binfmt-support parted
 
             (mkdir -p docker-rpi-emu \
                 && cd docker-rpi-emu \
@@ -152,24 +159,59 @@ case "$(uname)" in
 
             pip3 install git-archive-all
 
-            IMAGE_NAME=$(basename "${IMAGE_URL}" .zip)
-            IMAGE_FILE="$IMAGE_NAME".img
-            [ -f "$TOOLS_HOME"/images/"$IMAGE_FILE" ] || {
+            # Determine archive type and image stem name from IMAGE_URL
+            IMAGE_STEM_NAME=""
+            ARCHIVE_TYPE=""
+
+            if [[ ${IMAGE_URL} == *.zip ]]; then
+                ARCHIVE_TYPE="zip"
+                IMAGE_STEM_NAME=$(basename "${IMAGE_URL}" .zip)
+            elif [[ ${IMAGE_URL} == *.img.xz ]]; then
+                ARCHIVE_TYPE="xz"
+                IMAGE_STEM_NAME=$(basename "${IMAGE_URL}" .img.xz)
+            else
+                echo "Unsupported image archive format in IMAGE_URL: ${IMAGE_URL}" >&2
+                echo "Must end in .zip or .img.xz" >&2
+                exit 1
+            fi
+
+            # The final .img filename, e.g., "raspbian.img"
+            FINAL_IMAGE_FILENAME="${IMAGE_STEM_NAME}.img"
+            # Full path to where the final .img file will be stored
+            FINAL_IMAGE_PATH_IN_TOOLS="$TOOLS_HOME/images/$FINAL_IMAGE_FILENAME"
+
+            [ -f "$FINAL_IMAGE_PATH_IN_TOOLS" ] || {
                 # unit MB
                 EXPAND_SIZE=1024
 
                 [ -d "$TOOLS_HOME"/images ] || mkdir -p "$TOOLS_HOME"/images
 
-                [[ -f "$IMAGE_NAME".zip ]] || curl -LO "$IMAGE_URL"
+                # Name of the archive file as it will be saved by curl -LO
+                LOCAL_ARCHIVE_FILENAME=$(basename "${IMAGE_URL}")
 
-                unzip "$IMAGE_NAME".zip -d /tmp
+                # Download the archive if it's not already present in the current directory
+                [[ -f $LOCAL_ARCHIVE_FILENAME ]] || curl -fLO "$IMAGE_URL"
 
+                # Decompress/extract the image to /tmp with the name $FINAL_IMAGE_FILENAME
+                # e.g. /tmp/raspbian.img
+                if [ "$ARCHIVE_TYPE" == "zip" ]; then
+                    # Assumes the zip file "$IMAGE_STEM_NAME.zip" contains "$IMAGE_STEM_NAME.img" at its root
+                    unzip -o "$LOCAL_ARCHIVE_FILENAME" "${IMAGE_STEM_NAME}.img" -d /tmp
+                elif [ "$ARCHIVE_TYPE" == "xz" ]; then
+                    # Decompresses "$IMAGE_STEM_NAME.img.xz" to "/tmp/$IMAGE_STEM_NAME.img"
+                    xz -dc "$LOCAL_ARCHIVE_FILENAME" >"/tmp/$FINAL_IMAGE_FILENAME"
+                fi
+
+                # Expand the image in /tmp and then move it to its final destination
                 (cd /tmp \
-                    && dd if=/dev/zero bs=1048576 count="$EXPAND_SIZE" >>"$IMAGE_FILE" \
-                    && mv "$IMAGE_FILE" "$TOOLS_HOME"/images/"$IMAGE_FILE")
+                    && dd if=/dev/zero bs=1048576 count="$EXPAND_SIZE" >>"$FINAL_IMAGE_FILENAME" \
+                    && mv "$FINAL_IMAGE_FILENAME" "$FINAL_IMAGE_PATH_IN_TOOLS")
+
+                # Clean up the downloaded archive from the current directory
+                rm -f "$LOCAL_ARCHIVE_FILENAME"
 
                 (cd docker-rpi-emu/scripts \
-                    && sudo ./expand.sh "$TOOLS_HOME"/images/"$IMAGE_FILE" "$EXPAND_SIZE")
+                    && sudo ./expand.sh "$FINAL_IMAGE_PATH_IN_TOOLS" "$EXPAND_SIZE")
             }
         fi
         ;;

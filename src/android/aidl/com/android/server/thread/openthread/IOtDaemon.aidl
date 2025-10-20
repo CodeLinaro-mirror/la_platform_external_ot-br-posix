@@ -139,9 +139,13 @@ oneway interface IOtDaemon {
     /**
      * Joins this device to the network specified by {@code activeOpDatasetTlvs}.
      *
+     * If {@code createPartitionIfNotFound} is set to `true`, this device will form a new partition
+     * as a Leader if no partition can be found.
+     *
      * @sa android.net.thread.ThreadNetworkController#join
      */
-    void join(in byte[] activeOpDatasetTlvs, in IOtStatusReceiver receiver);
+    void join(in byte[] activeOpDatasetTlvs, boolean createPartitionIfNotFound,
+            in IOtStatusReceiver receiver);
 
     /**
      * Leaves from the current network.
@@ -264,6 +268,4 @@ oneway interface IOtDaemon {
      * @param receiver the status receiver
      */
     void deactivateEphemeralKeyMode(in IOtStatusReceiver receiver);
-
-    // TODO: add Border Router APIs
 }

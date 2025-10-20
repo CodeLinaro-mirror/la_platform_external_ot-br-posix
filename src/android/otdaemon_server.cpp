@@ -52,6 +52,7 @@
 #include <openthread/platform/infra_if.h>
 #include <openthread/platform/radio.h>
 
+#include "com_android_net_thread_flags.h"
 #include "agent/vendor.hpp"
 #include "android/android_rcp_host.hpp"
 #include "android/common_utils.hpp"
@@ -60,6 +61,8 @@
 #include "host/thread_host.hpp"
 
 #define BYTE_ARR_END(arr) ((arr) + sizeof(arr))
+
+namespace thread_flags = com::android::net::thread::flags;
 
 namespace otbr {
 
@@ -72,7 +75,7 @@ std::shared_ptr<VendorServer> VendorServer::newInstance(Application &aApplicatio
         static_cast<otbr::Android::MdnsPublisher &>(aApplication.GetPublisher()), aApplication.GetBorderAgent(),
         aApplication.GetAdvertisingProxy(), [&aApplication]() {
             aApplication.Deinit();
-            aApplication.Init();
+            aApplication.Init(/* aRestListenAddress */"", /* aRestListenPort */0);
         });
 }
 
@@ -207,6 +210,11 @@ void OtDaemonServer::StateCallback(otChangedFlags aFlags)
             onMeshPrefixes.assign(mOnMeshPrefixes.begin(), mOnMeshPrefixes.end());
             mCallback->onPrefixChanged(onMeshPrefixes);
         }
+    }
+
+    if ((aFlags & OT_CHANGED_THREAD_ROLE))
+    {
+        mBorderAgent.SetEnabled(isAttached() && mAndroidHost->GetConfiguration().borderRouterEnabled);
     }
 }
 
@@ -600,6 +608,11 @@ void OtDaemonServer::initializeInternal(const bool                              
     mMdnsPublisher.SetINsdPublisher(aINsdPublisher);
     mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
 
+    if (thread_flags::dnssd_rdp_enabled())
+    {
+        mAdvProxy.SetEnabled(aConfiguration.borderRouterEnabled);
+    }
+
     for (const auto &txtAttr : aMeshcopTxts.nonStandardTxtEntries)
     {
         nonStandardTxts.emplace_back(txtAttr.name.c_str(), txtAttr.value.data(), txtAttr.value.size());
@@ -611,7 +624,6 @@ void OtDaemonServer::initializeInternal(const bool                              
         otbrLogCrit("Failed to set MeshCoP values: %d", static_cast<int>(error));
     }
 
-    mBorderAgent.SetEnabled(aEnabled && aConfiguration.borderRouterEnabled);
     mAndroidHost->SetTrelEnabled(aTrelEnabled);
     mTrelEnabled = aTrelEnabled;
 
@@ -646,11 +658,6 @@ void OtDaemonServer::UpdateThreadEnabledState(const int enabled, const std::shar
     {
         aReceiver->onSuccess();
     }
-
-    // Enables the BorderAgent module only when Thread is enabled and configured a Border Router,
-    // so that it won't publish the MeshCoP mDNS service when unnecessary
-    // TODO: b/376217403 - enables / disables OT Border Agent at runtime
-    mBorderAgent.SetEnabled(enabled == OT_STATE_ENABLED && mAndroidHost->GetConfiguration().borderRouterEnabled);
 
     NotifyStateChanged(/* aListenerId*/ -1);
 
@@ -758,8 +765,8 @@ exit:
     {
         if (error == OT_ERROR_NONE)
         {
-            mState.ephemeralKeyState          = GetEphemeralKeyState(otBorderAgentEphemeralKeyGetState(GetOtInstance()));
-            mState.ephemeralKeyPasscode       = passcode;
+            mState.ephemeralKeyState    = GetEphemeralKeyState(otBorderAgentEphemeralKeyGetState(GetOtInstance()));
+            mState.ephemeralKeyPasscode = passcode;
             mState.ephemeralKeyLifetimeMillis = aLifetimeMillis;
             mEphemeralKeyExpiryMillis         = std::chrono::duration_cast<std::chrono::milliseconds>(
                                             std::chrono::steady_clock::now().time_since_epoch())
@@ -911,22 +918,30 @@ exit:
 }
 
 Status OtDaemonServer::join(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+                            bool                                      aCreatePartitionIfNotFound,
                             const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
+    otOperationalDatasetTlvs otDatasetTlvs;
+
     VerifyOrExit(mHost.IsInitialized(), PropagateResult(OT_ERROR_INVALID_STATE, "OT is not initialized", aReceiver));
 
-    mTaskRunner.Post([aActiveOpDatasetTlvs, aReceiver, this]() { joinInternal(aActiveOpDatasetTlvs, aReceiver); });
+    std::copy(aActiveOpDatasetTlvs.begin(), aActiveOpDatasetTlvs.end(), otDatasetTlvs.mTlvs);
+    otDatasetTlvs.mLength = static_cast<uint8_t>(aActiveOpDatasetTlvs.size());
+
+    mTaskRunner.Post([otDatasetTlvs, aCreatePartitionIfNotFound, aReceiver, this]() {
+        joinInternal(otDatasetTlvs, aCreatePartitionIfNotFound, aReceiver);
+    });
 
 exit:
     return Status::ok();
 }
 
-void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aActiveOpDatasetTlvs,
+void OtDaemonServer::joinInternal(const otOperationalDatasetTlvs           &aNewDatasetTlvs,
+                                  bool                                      aCreatePartitionIfNotFound,
                                   const std::shared_ptr<IOtStatusReceiver> &aReceiver)
 {
     int                      error = OT_ERROR_NONE;
     std::string              message;
-    otOperationalDatasetTlvs newDatasetTlvs;
     otOperationalDatasetTlvs curDatasetTlvs;
 
     VerifyOrExit(mState.threadEnabled != OT_STATE_DISABLING, error = OT_ERROR_BUSY, message = "Thread is disabling");
@@ -937,11 +952,11 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
 
     otbrLogInfo("Start joining...");
 
-    std::copy(aActiveOpDatasetTlvs.begin(), aActiveOpDatasetTlvs.end(), newDatasetTlvs.mTlvs);
-    newDatasetTlvs.mLength = static_cast<uint8_t>(aActiveOpDatasetTlvs.size());
+    SuccessOrExit(
+        error = otThreadSetLinkMode(GetOtInstance(), AndroidRcpHost::GetLinkModeConfig(aCreatePartitionIfNotFound)));
 
     error = otDatasetGetActiveTlvs(GetOtInstance(), &curDatasetTlvs);
-    if (error == OT_ERROR_NONE && areDatasetsEqual(newDatasetTlvs, curDatasetTlvs) && isAttached())
+    if (error == OT_ERROR_NONE && areDatasetsEqual(aNewDatasetTlvs, curDatasetTlvs) && isAttached())
     {
         // Do not leave and re-join if this device has already joined the same network.
         // This can help elimilate unnecessary connectivity and topology disruption and
@@ -954,17 +969,17 @@ void OtDaemonServer::joinInternal(const std::vector<uint8_t>               &aAct
     // If this device has ever joined a different network, try to leave from previous
     // network first. Do this even this device role is detached or disabled, this is for
     // clearing any in-memory state of the previous network.
-    if (error == OT_ERROR_NONE && !areDatasetsEqual(newDatasetTlvs, curDatasetTlvs))
+    if (error == OT_ERROR_NONE && !areDatasetsEqual(aNewDatasetTlvs, curDatasetTlvs))
     {
         LeaveGracefully(true /* aEraseDataset */, "join",
-                        [aActiveOpDatasetTlvs, aReceiver, this]() { join(aActiveOpDatasetTlvs, aReceiver); });
+                        [aNewDatasetTlvs, aCreatePartitionIfNotFound, aReceiver, this]() {
+                            joinInternal(aNewDatasetTlvs, aCreatePartitionIfNotFound, aReceiver);
+                        });
         ExitNow();
     }
 
-    SuccessOrExit(error   = otDatasetSetActiveTlvs(GetOtInstance(), &newDatasetTlvs),
+    SuccessOrExit(error   = otDatasetSetActiveTlvs(GetOtInstance(), &aNewDatasetTlvs),
                   message = "Failed to set Active Operational Dataset");
-
-    // TODO(b/273160198): check how we can implement join as a child
 
     // Shouldn't we have an equivalent `otThreadAttach` method vs `otThreadDetachGracefully`?
     SuccessOrExit(error = otIp6SetEnabled(GetOtInstance(), true), message = "Failed to bring up Thread interface");
@@ -1257,7 +1272,13 @@ Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration             
         if (aConfiguration != mAndroidHost->GetConfiguration())
         {
             mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
-            mBorderAgent.SetEnabled(mState.threadEnabled && aConfiguration.borderRouterEnabled);
+
+            if (thread_flags::dnssd_rdp_enabled())
+            {
+                mAdvProxy.SetEnabled(aConfiguration.borderRouterEnabled);
+            }
+
+            mBorderAgent.SetEnabled(isAttached() && aConfiguration.borderRouterEnabled);
             mAndroidHost->SetConfiguration(aConfiguration, aReceiver);
         }
     });

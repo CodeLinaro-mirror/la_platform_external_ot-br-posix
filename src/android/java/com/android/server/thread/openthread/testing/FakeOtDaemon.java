@@ -90,6 +90,9 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     @Nullable private Long mCallbackListenerId;
     @Nullable private RemoteException mJoinException;
     @Nullable private RemoteException mSetEnabledException;
+    @Nullable private String mInfraLinkInterfaceName;
+    @Nullable private String mInfraLinkNat64Prefix;
+    @Nullable private List<String> mInfraLinkDnsServers;
     @Nullable private String mNat64Cidr;
     @Nullable private RemoteException mSetNat64CidrException;
     @Nullable private RemoteException mRunOtCtlCommandException;
@@ -427,15 +430,31 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     public void setInfraLinkInterfaceName(
             String interfaceName, ParcelFileDescriptor fd, IOtStatusReceiver receiver)
             throws RemoteException {
-        throw new UnsupportedOperationException(
-                "FakeOtDaemon#setInfraLinkInterfaceName is not implemented!");
+        mInfraLinkInterfaceName = interfaceName;
+        if (receiver != null) {
+            receiver.onSuccess();
+        }
+    }
+
+    /** Returns the infra link interface name set by {@link #setInfraLinkInterfaceName}. */
+    @Nullable
+    public String getInfraLinkInterfaceName() {
+        return mInfraLinkInterfaceName;
     }
 
     @Override
     public void setInfraLinkNat64Prefix(String nat64Prefix, IOtStatusReceiver receiver)
             throws RemoteException {
-        throw new UnsupportedOperationException(
-                "FakeOtDaemon#setInfraLinkNat64Prefix is not implemented!");
+        mInfraLinkNat64Prefix = nat64Prefix;
+        if (receiver != null) {
+            receiver.onSuccess();
+        }
+    }
+
+    /** Returns the infra link NAT64 prefix set by {@link #setInfraLinkNat64Prefix}. */
+    @Nullable
+    public String getInfraLinkNat64Prefix() {
+        return mInfraLinkNat64Prefix;
     }
 
     /** Sets the {@link RemoteException} which will be thrown from {@link #setNat64Cidr}. */
@@ -463,8 +482,16 @@ public final class FakeOtDaemon extends IOtDaemon.Stub {
     @Override
     public void setInfraLinkDnsServers(List<String> dnsServers, IOtStatusReceiver receiver)
             throws RemoteException {
-        throw new UnsupportedOperationException(
-                "FakeOtDaemon#setInfraLinkDnsServers is not implemented!");
+        mInfraLinkDnsServers = dnsServers;
+        if (receiver != null) {
+            receiver.onSuccess();
+        }
+    }
+
+    /** Returns the infra link DNS servers set by {@link #setInfraLinkDnsServers}. */
+    @Nullable
+    public List<String> getInfraLinkDnsServers() {
+        return mInfraLinkDnsServers;
     }
 
     @Override

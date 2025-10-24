@@ -226,6 +226,7 @@ public final class FakeOtDaemonTest {
                         () ->
                                 mFakeOtDaemon.join(
                                         DEFAULT_ACTIVE_DATASET_TLVS,
+                                        true /* createPartitionIfNotFound */,
                                         new IOtStatusReceiver.Default()));
         assertThat(thrown).isEqualTo(joinException);
     }
@@ -251,6 +252,7 @@ public final class FakeOtDaemonTest {
 
         mFakeOtDaemon.join(
                 DEFAULT_ACTIVE_DATASET_TLVS,
+                true /* createPartitionIfNotFound */,
                 new IOtStatusReceiver.Default() {
                     @Override
                     public void onSuccess() {

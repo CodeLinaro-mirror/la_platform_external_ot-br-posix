@@ -388,14 +388,16 @@ TEST(Netif, WpanIfHasCorrectMulticastAddresses_AfterUpdatingMulticastAddresses)
         {0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfc}};
     otbr::Ip6Address kMulAddr2 = {
         {0xff, 0x32, 0x00, 0x40, 0xfd, 0x0d, 0x07, 0xfc, 0xa1, 0xb9, 0xf0, 0x50, 0x00, 0x00, 0x00, 0x01}};
-    const char *kMulAddr1Str = "ff03::fc";
-    const char *kMulAddr2Str = "ff32:40:fd0d:7fc:a1b9:f050:0:1";
+    const char        *kMulAddr1Str      = "ff03::fc";
+    const char        *kMulAddr2Str      = "ff32:40:fd0d:7fc:a1b9:f050:0:1";
+    constexpr uint16_t kWaitTimeMilliSec = 100;
 
     otbr::Ip6Address testArray1[] = {
         kMulAddr1,
     };
     std::vector<otbr::Ip6Address> testVec1(testArray1, testArray1 + sizeof(testArray1) / sizeof(otbr::Ip6Address));
     netif.UpdateIp6MulticastAddresses(testVec1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kWaitTimeMilliSec));
     std::vector<std::string> wpanMulAddrs = GetAllIp6MulAddrs(wpan);
     EXPECT_EQ(wpanMulAddrs.size(), 5);
     EXPECT_THAT(wpanMulAddrs, ::testing::Contains(kMulAddr1Str));
@@ -407,6 +409,7 @@ TEST(Netif, WpanIfHasCorrectMulticastAddresses_AfterUpdatingMulticastAddresses)
     otbr::Ip6Address              testArray2[] = {kMulAddr1, kMulAddr2};
     std::vector<otbr::Ip6Address> testVec2(testArray2, testArray2 + sizeof(testArray2) / sizeof(otbr::Ip6Address));
     netif.UpdateIp6MulticastAddresses(testVec2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kWaitTimeMilliSec));
     wpanMulAddrs = GetAllIp6MulAddrs(wpan);
     EXPECT_EQ(wpanMulAddrs.size(), 6);
     EXPECT_THAT(wpanMulAddrs, ::testing::Contains(kMulAddr1Str));
@@ -419,6 +422,7 @@ TEST(Netif, WpanIfHasCorrectMulticastAddresses_AfterUpdatingMulticastAddresses)
     otbr::Ip6Address              testArray3[] = {kDefaultMulAddr1};
     std::vector<otbr::Ip6Address> testVec3(testArray3, testArray3 + sizeof(testArray3) / sizeof(otbr::Ip6Address));
     netif.UpdateIp6MulticastAddresses(testVec3);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kWaitTimeMilliSec));
     wpanMulAddrs = GetAllIp6MulAddrs(wpan);
     EXPECT_EQ(wpanMulAddrs.size(), 4);
     EXPECT_THAT(wpanMulAddrs, ::testing::Contains(kDefaultMulAddr1Str));
@@ -428,6 +432,7 @@ TEST(Netif, WpanIfHasCorrectMulticastAddresses_AfterUpdatingMulticastAddresses)
 
     std::vector<otbr::Ip6Address> empty;
     netif.UpdateIp6MulticastAddresses(empty);
+    std::this_thread::sleep_for(std::chrono::milliseconds(kWaitTimeMilliSec));
     wpanMulAddrs = GetAllIp6MulAddrs(wpan);
     EXPECT_EQ(wpanMulAddrs.size(), 4);
     EXPECT_THAT(wpanMulAddrs, ::testing::Contains(kDefaultMulAddr1Str));
@@ -466,12 +471,21 @@ TEST(Netif, WpanIfStateChangesCorrectly_AfterSettingNetifState)
     netif.Deinit();
 }
 
-void receiveTask(int aSockFd, uint8_t *aRecvBuf, struct sockaddr_in6 *aListenAddr)
+void producerTask(otbr::Netif &aNetif)
 {
-    socklen_t   len = sizeof(*aListenAddr);
-    int         n = recvfrom(aSockFd, (char *)aRecvBuf, kMaxIp6Size, MSG_WAITALL, (struct sockaddr *)aListenAddr, &len);
-    std::string udpPayload(reinterpret_cast<const char *>(aRecvBuf), n);
-    EXPECT_EQ(udpPayload, "Hello Otbr Netif!");
+    // Udp Packet
+    // Ip6 source: fd2a:c30c:87d3:1:ed1c:c91:ccb6:578a
+    // Ip6 destination: fd2a:c30c:87d3:1:ed1c:c91:ccb6:578b
+    // Udp destination port: 12345
+    // Udp payload: "Hello Otbr Netif!"
+    const uint8_t udpPacket[] = {0x60, 0x0e, 0xea, 0x69, 0x00, 0x19, 0x11, 0x40, 0xfd, 0x2a, 0xc3, 0x0c, 0x87,
+                                 0xd3, 0x00, 0x01, 0xed, 0x1c, 0x0c, 0x91, 0xcc, 0xb6, 0x57, 0x8a, 0xfd, 0x2a,
+                                 0xc3, 0x0c, 0x87, 0xd3, 0x00, 0x01, 0xed, 0x1c, 0x0c, 0x91, 0xcc, 0xb6, 0x57,
+                                 0x8b, 0xe7, 0x08, 0x30, 0x39, 0x00, 0x19, 0x36, 0x81, 0x48, 0x65, 0x6c, 0x6c,
+                                 0x6f, 0x20, 0x4f, 0x74, 0x62, 0x72, 0x20, 0x4e, 0x65, 0x74, 0x69, 0x66, 0x21};
+
+    sleep(1);
+    aNetif.Ip6Receive(udpPacket, sizeof(udpPacket));
 }
 
 TEST(Netif, WpanIfRecvIp6PacketCorrectly_AfterReceivingFromNetif)
@@ -494,7 +508,7 @@ TEST(Netif, WpanIfRecvIp6PacketCorrectly_AfterReceivingFromNetif)
     const char         *listenIp = "fd2a:c30c:87d3:1:ed1c:c91:ccb6:578b";
     uint8_t             recvBuf[kMaxIp6Size];
 
-    if ((sockFd = socket(AF_INET6, SOCK_DGRAM, 0)) < 0)
+    if ((sockFd = socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0)
     {
         perror("socket creation failed");
         exit(EXIT_FAILURE);
@@ -511,22 +525,30 @@ TEST(Netif, WpanIfRecvIp6PacketCorrectly_AfterReceivingFromNetif)
         exit(EXIT_FAILURE);
     }
 
-    // Udp Packet
-    // Ip6 source: fd2a:c30c:87d3:1:ed1c:c91:ccb6:578a
-    // Ip6 destination: fd2a:c30c:87d3:1:ed1c:c91:ccb6:578b
-    // Udp destination port: 12345
-    // Udp payload: "Hello Otbr Netif!"
-    const uint8_t udpPacket[] = {0x60, 0x0e, 0xea, 0x69, 0x00, 0x19, 0x11, 0x40, 0xfd, 0x2a, 0xc3, 0x0c, 0x87,
-                                 0xd3, 0x00, 0x01, 0xed, 0x1c, 0x0c, 0x91, 0xcc, 0xb6, 0x57, 0x8a, 0xfd, 0x2a,
-                                 0xc3, 0x0c, 0x87, 0xd3, 0x00, 0x01, 0xed, 0x1c, 0x0c, 0x91, 0xcc, 0xb6, 0x57,
-                                 0x8b, 0xe7, 0x08, 0x30, 0x39, 0x00, 0x19, 0x36, 0x81, 0x48, 0x65, 0x6c, 0x6c,
-                                 0x6f, 0x20, 0x4f, 0x74, 0x62, 0x72, 0x20, 0x4e, 0x65, 0x74, 0x69, 0x66, 0x21};
+    std::thread producerThread(producerTask, std::ref(netif));
 
-    std::thread recvThread(receiveTask, sockFd, recvBuf, &listenAddr);
+    fd_set         readFds;
+    struct timeval timeout;
+    timeout.tv_sec  = 3;
+    timeout.tv_usec = 0;
 
-    netif.Ip6Receive(udpPacket, sizeof(udpPacket));
+    FD_ZERO(&readFds);
+    FD_SET(sockFd, &readFds);
 
-    recvThread.join();
+    int rval = select(sockFd + 1, &readFds, NULL, NULL, &timeout);
+
+    ASSERT_GT(rval, 0) << "Select failed: No data is received";
+    ASSERT_TRUE(FD_ISSET(sockFd, &readFds));
+
+    socklen_t len = sizeof(listenAddr);
+    int       n   = recvfrom(sockFd, (char *)recvBuf, kMaxIp6Size, 0, (struct sockaddr *)&listenAddr, &len);
+    ASSERT_GT(n, 0) << "recvfrom failed: " << strerror(errno);
+
+    std::string udpPayload(reinterpret_cast<const char *>(recvBuf), n);
+    EXPECT_EQ(udpPayload, "Hello Otbr Netif!");
+
+    producerThread.join();
+
     close(sockFd);
     netif.Deinit();
 }

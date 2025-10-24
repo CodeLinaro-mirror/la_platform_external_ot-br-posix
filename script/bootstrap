@@ -35,7 +35,8 @@
 
 FIREWALL="${FIREWALL:-1}"
 
-OTBR_MDNS="${OTBR_MDNS:-mDNSResponder}"
+OTBR_MDNS="${OTBR_MDNS:-openthread}"
+BACKBONE_ROUTER="${BACKBONE_ROUTER:-1}"
 OT_BACKBONE_CI="${OT_BACKBONE_CI:-0}"
 REFERENCE_DEVICE="${REFERENCE_DEVICE:-0}"
 
@@ -49,6 +50,8 @@ install_packages_apt()
         libreadline-dev \
         libncurses-dev
 
+    sudo apt-get install -y libgmock-dev libgtest-dev || echo 'WARNING: failed to install gtest and gmock!'
+
     sudo apt-get install --no-install-recommends -y build-essential ninja-build cmake
 
     sudo apt-get install --no-install-recommends -y rsyslog
@@ -57,30 +60,31 @@ install_packages_apt()
     sudo apt-get install --no-install-recommends -y dbus libdbus-1-dev
 
     # mDNS
-    sudo apt-get install --no-install-recommends -y libavahi-client3 libavahi-common-dev libavahi-client-dev
 
-    # Thread Certification tests require Avahi to publish records for tests. Since the
-    # same image is used for all tests this needs to be installed here. Additionally
-    # Avahi should be included for reference device builds.
-    if [[ ${OTBR_MDNS} == "avahi" || ${OT_BACKBONE_CI} == 1 || ${REFERENCE_DEVICE} == 1 ]]; then
-        sudo apt-get install --no-install-recommends -y avahi-daemon
+    # OT backbone CI tests require Avahi to publish records for testing.
+    if [[ ${OTBR_MDNS} == "avahi" || ${OT_BACKBONE_CI} == 1 ]]; then
+        sudo apt-get install --no-install-recommends -y avahi-daemon libavahi-client-dev libavahi-client3 libavahi-common-dev
         # Increase the object number limit to rid of 'Too many objects' error
         sudo sed -i 's/^#objects-per-client-max=[0-9]\+/objects-per-client-max=30000/' /etc/avahi/avahi-daemon.conf
     fi
 
-    (MDNS_RESPONDER_SOURCE_NAME=mDNSResponder-2600.100.147 \
-        && cd /tmp \
-        && wget --no-check-certificate https://github.com/apple-oss-distributions/mDNSResponder/archive/refs/tags/$MDNS_RESPONDER_SOURCE_NAME.tar.gz \
-        && mkdir -p $MDNS_RESPONDER_SOURCE_NAME \
-        && tar xvf $MDNS_RESPONDER_SOURCE_NAME.tar.gz -C $MDNS_RESPONDER_SOURCE_NAME --strip-components=1 \
-        && cd /tmp/"$MDNS_RESPONDER_SOURCE_NAME" \
-        && cd mDNSPosix \
-        && make os=linux tls=no && sudo make install os=linux tls=no)
+    # Thread Certification tests require mDNSResponder ('dns-sd') to publish records for testing. Since the
+    # same image is used for reference OTBRs and for reference Linux hosts, this needs to be installed here.
+    if [[ ${OTBR_MDNS} == "mDNSResponder" || ${OT_BACKBONE_CI} == 1 || ${REFERENCE_DEVICE} == 1 ]]; then
+        (MDNS_RESPONDER_SOURCE_NAME=mDNSResponder-2600.100.147 \
+            && cd /tmp \
+            && wget -c --tries=3 --no-check-certificate -O "$MDNS_RESPONDER_SOURCE_NAME.tar.gz" \
+                "https://github.com/apple-oss-distributions/mDNSResponder/archive/refs/tags/$MDNS_RESPONDER_SOURCE_NAME.tar.gz" \
+            && rm -rf "/tmp/$MDNS_RESPONDER_SOURCE_NAME" \
+            && mkdir -p "$MDNS_RESPONDER_SOURCE_NAME" \
+            && tar xvf "$MDNS_RESPONDER_SOURCE_NAME.tar.gz" -C "$MDNS_RESPONDER_SOURCE_NAME" --overwrite --strip-components=1 \
+            && cd "/tmp/$MDNS_RESPONDER_SOURCE_NAME" \
+            && cd mDNSPosix \
+            && make os=linux tls=no && sudo make install os=linux tls=no)
+    fi
 
     # nat64
-    without NAT64 || {
-        sudo apt-get install --no-install-recommends -y iptables
-    }
+    sudo apt-get install --no-install-recommends -y iptables
 
     sudo apt-get install --no-install-recommends -y bind9
 
@@ -98,14 +102,14 @@ EOF
         sudo apt-get install --no-install-recommends -y radvd
     }
 
-    # dhcpcd5
-    without DHCPV6_PD || sudo apt-get install --no-install-recommends -y dhcpcd5
-
     # libjsoncpp
     sudo apt-get install --no-install-recommends -y libjsoncpp-dev
 
     # reference device
-    without REFERENCE_DEVICE || sudo apt-get install --no-install-recommends -y radvd dnsutils avahi-utils iperf3 ndisc6
+    without REFERENCE_DEVICE || sudo apt-get install --no-install-recommends -y radvd dnsutils iperf3 ndisc6
+
+    # any CI device
+    without OT_BACKBONE_CI || sudo apt-get install --no-install-recommends -y dnsutils avahi-utils
 
     # backbone-router
     without BACKBONE_ROUTER || sudo apt-get install --no-install-recommends -y libnetfilter-queue1 libnetfilter-queue-dev
@@ -114,7 +118,7 @@ EOF
     without WEB_GUI || command -v npm || sudo apt-get install --no-install-recommends -y nodejs npm
 
     # firewall
-    sudo apt-get install -y iptables ipset
+    sudo apt-get install -y ipset
 
     # protobuf compiler
     sudo apt-get install -y libprotobuf-dev protobuf-compiler
@@ -144,7 +148,7 @@ install_packages_rpm()
 
 install_packages_brew()
 {
-    brew install cmake dbus jsoncpp ninja
+    brew install cmake dbus jsoncpp ninja googletest
 }
 
 install_packages_source()

@@ -38,8 +38,10 @@
 #include <stdarg.h>
 #include <stddef.h>
 
+#include <openthread/platform/logging.h>
+
 #ifndef OTBR_LOG_TAG
-#error "OTBR_LOG_TAG is not defined"
+#define OTBR_LOG_TAG "OTBR"
 #endif
 
 #include "common/types.hpp"

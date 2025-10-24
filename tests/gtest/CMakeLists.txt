@@ -29,18 +29,11 @@
 cmake_minimum_required(VERSION 3.14)
 project(openthread-br-gtest)
 
+find_package(GTest CONFIG REQUIRED COMPONENTS GTest GMock Main)
+
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
@@ -56,13 +49,43 @@ add_executable(otbr-gtest-unit
 target_link_libraries(otbr-gtest-unit
     mbedtls
     otbr-common
-    otbr-ncp
+    otbr-host
     otbr-utils
     GTest::gmock_main
 )
 gtest_discover_tests(otbr-gtest-unit)
 
-if(OTBR_MDNS)
+add_executable(otbr-gtest-unit-dnssd
+    ${OTBR_PROJECT_DIRECTORY}/src/common/types.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/common/logging.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/common/mainloop.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/common/mainloop_manager.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/common/task_runner.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/host/posix/dnssd.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/mdns/mdns.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/utils/dns_utils.cpp
+    ${OTBR_PROJECT_DIRECTORY}/src/utils/string_utils.cpp
+    test_dnssd.cpp
+)
+target_compile_options(otbr-gtest-unit-dnssd
+    PRIVATE
+        -DOTBR_ENABLE_DNSSD_PLAT=1
+        -DOTBR_ENABLE_MDNS=1
+)
+target_include_directories(otbr-gtest-unit-dnssd
+    PRIVATE
+        ${OTBR_PROJECT_DIRECTORY}/include
+        ${OTBR_PROJECT_DIRECTORY}/src
+        ${OPENTHREAD_PROJECT_DIRECTORY}/include
+        ${OPENTHREAD_PROJECT_DIRECTORY}/src
+        ${OPENTHREAD_PROJECT_DIRECTORY}/src/posix/platform/include
+)
+target_link_libraries(otbr-gtest-unit-dnssd
+    GTest::gmock_main
+)
+gtest_discover_tests(otbr-gtest-unit-dnssd)
+
+if(OTBR_MDNS AND NOT OTBR_MDNS STREQUAL "openthread")
     add_executable(otbr-gtest-mdns-subscribe
         test_mdns_subscribe.cpp
     )
@@ -91,6 +114,7 @@ target_include_directories(otbr-posix-gtest-unit
 )
 target_link_libraries(otbr-posix-gtest-unit
     otbr-posix
+    openthread-ftd
     GTest::gmock_main
 )
 gtest_discover_tests(otbr-posix-gtest-unit PROPERTIES LABELS "sudo")
@@ -112,14 +136,20 @@ target_link_libraries(otbr-gtest-host-api
     otbr-common
     otbr-utils
     otbr-posix
+    otbr-host
     GTest::gmock_main
 )
 gtest_discover_tests(otbr-gtest-host-api)
 
 if(OTBR_TELEMETRY_DATA_API)
     add_executable(otbr-gtest-telemetry
-        ${OTBR_PROJECT_DIRECTORY}/src/utils/telemetry_retriever_border_agent.cpp
+        ${OTBR_PROJECT_DIRECTORY}/src/host/telemetry/telemetry_retriever_border_agent.cpp
         test_telemetry.cpp
+    )
+    target_compile_options(otbr-gtest-telemetry
+    PRIVATE
+        -DOTBR_ENABLE_TELEMETRY_DATA_API=1
+        -DOTBR_ENABLE_BORDER_AGENT=1
     )
     target_include_directories(otbr-gtest-telemetry
         PRIVATE

@@ -133,7 +133,17 @@ public:
     using ThreadEnabledStateCallback               = std::function<void(ThreadEnabledState)>;
     using BorderAgentMeshCoPServiceChangedCallback = std::function<void(bool, uint16_t, const uint8_t *, uint16_t)>;
     using EphemeralKeyStateChangedCallback         = std::function<void(otBorderAgentEphemeralKeyState, uint16_t)>;
-    using UdpForwardToHostCallback = std::function<void(const uint8_t *, uint16_t, const otIp6Address &, uint16_t)>;
+    /**
+     * Callback for forwarding UDP packets to the host.
+     *
+     * @param[in] aPayload         Pointer to the UDP payload.
+     * @param[in] aPayloadLength   Length of the UDP payload.
+     * @param[in] aPeerAddress     IPv6 address of the peer.
+     * @param[in] aPeerPort        UDP port of the peer.
+     * @param[in] aLocalPort       Local UDP port (on the Thread side).
+     */
+    using UdpForwardToHostCallback =
+        std::function<void(const uint8_t *, uint16_t, const otIp6Address &, uint16_t, uint16_t)>;
     using BackboneRouterMulticastListenerCallback =
         std::function<void(otBackboneRouterMulticastListenerEvent, Ip6Address)>;
     using BackboneRouterStateChangedCallback = std::function<void(otBackboneRouterState)>;
@@ -279,6 +289,17 @@ public:
      * @param[in] aCallback  The callback function.
      */
     virtual void AddEphemeralKeyStateChangedCallback(EphemeralKeyStateChangedCallback aCallback) = 0;
+
+#if OTBR_ENABLE_BORDER_AGENT && !OTBR_ENABLE_BORDER_AGENT_MESHCOP_SERVICE
+    /**
+     * This method sets or updates the Border Agent Vendor TXT Data.
+     *
+     * This is then passed to OpenThread stack to be included in the advertised `meshcop` service TXT Data.
+     *
+     * @param[in] aVendorTxtData   The encoded vendor TXT Data.
+     */
+    virtual void SetBorderAgentVendorTxtData(const std::vector<uint8_t> &aVendorTxtData) = 0;
+#endif
 
     /**
      * This methods a callback for the Thread stack to forward UDP packet to the host.

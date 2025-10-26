@@ -108,7 +108,17 @@ public:
     using InfraIfSendIcmp6NdCallback = std::function<void(uint32_t, const otIp6Address &, const uint8_t *, uint16_t)>;
     using BorderAgentMeshCoPServiceChangedCallback = std::function<void(bool, uint16_t, const uint8_t *, uint16_t)>;
     using CliDaemonOutputCallback                  = std::function<void(const char *)>;
-    using UdpForwardSendCallback = std::function<void(const uint8_t *, uint16_t, const otIp6Address &, uint16_t)>;
+    /**
+     * Callback for forwarding UDP packets to the host.
+     *
+     * @param[in] aPayload         Pointer to the UDP payload.
+     * @param[in] aPayloadLength   Length of the UDP payload.
+     * @param[in] aPeerAddress     IPv6 address of the peer.
+     * @param[in] aPeerPort        UDP port of the peer.
+     * @param[in] aLocalPort       Local UDP port (on the Thread side).
+     */
+    using UdpForwardSendCallback =
+        std::function<void(const uint8_t *, uint16_t, const otIp6Address &, uint16_t, uint16_t)>;
     using BackboneRouterMulticastListenerCallback =
         std::function<void(otBackboneRouterMulticastListenerEvent, Ip6Address)>;
     using BackboneRouterStateChangedCallback = std::function<void(otBackboneRouterState)>;
@@ -338,17 +348,16 @@ public:
      * @param[in] aState  The dnssd state.
      */
     void DnssdSetState(Mdns::Publisher::State aState);
+#endif // OTBR_ENABLE_SRP_ADVERTISING_PROXY
 
+#if OTBR_ENABLE_MDNS
     /**
      * This method sets the mDNS Publisher object.
      *
      * @param[in] aPublisher  A pointer to the mDNS Publisher object.
      */
-    void SetMdnsPublisher(otbr::Mdns::Publisher *aPublisher)
-    {
-        mPublisher = aPublisher;
-    }
-#endif // OTBR_ENABLE_SRP_ADVERTISING_PROXY
+    void SetMdnsPublisher(otbr::Mdns::Publisher *aPublisher) { mPublisher = aPublisher; }
+#endif
 
     /**
      * This method sets a callback that will be invoked when there are any changes on the MeshCoP service from
@@ -378,10 +387,7 @@ public:
      *
      * @param[in] aCallback    The callback to send the UDP packet to the remote side.
      */
-    void SetUdpForwardSendCallback(UdpForwardSendCallback aCallback)
-    {
-        mUdpForwardSendCallback = aCallback;
-    }
+    void SetUdpForwardSendCallback(UdpForwardSendCallback aCallback) { mUdpForwardSendCallback = aCallback; }
 
     /**
      * This method enables/disables the Backbone Router.
@@ -409,6 +415,13 @@ public:
     {
         mBackboneRouterMulticastListenerCallback = aCallback;
     }
+
+    /**
+     * This method sets the Host Power state on the NCP.
+     *
+     * @param[in] aState  The Host Power state.
+     */
+    void SetHostPowerState(uint8_t aState, AsyncTaskPtr aAsyncTask);
 
 private:
     using FailureHandler = std::function<void(otError)>;
@@ -519,7 +532,7 @@ private:
     TaskRunner mTaskRunner;
 
     PropsObserver *mPropsObserver;
-#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
+#if OTBR_ENABLE_MDNS
     otbr::Mdns::Publisher *mPublisher;
 #endif
 
@@ -529,6 +542,7 @@ private:
     AsyncTaskPtr mThreadSetEnabledTask;
     AsyncTaskPtr mThreadDetachGracefullyTask;
     AsyncTaskPtr mThreadErasePersistentInfoTask;
+    AsyncTaskPtr mSetHostPowerStateTask;
 
     Ip6AddressTableCallback                  mIp6AddressTableCallback;
     Ip6MulticastAddressTableCallback         mIp6MulticastAddressTableCallback;

@@ -49,8 +49,8 @@
 #include "common/mainloop.hpp"
 #include "common/task_runner.hpp"
 #include "common/types.hpp"
+#include "host/thread_helper.hpp"
 #include "host/thread_host.hpp"
-#include "utils/thread_helper.hpp"
 
 namespace otbr {
 #if OTBR_ENABLE_FEATURE_FLAGS
@@ -130,7 +130,7 @@ public:
      *
      * @retval The pointer to the helper object.
      */
-    otbr::agent::ThreadHelper *GetThreadHelper(void)
+    ThreadHelper *GetThreadHelper(void)
     {
         assert(mThreadHelper != nullptr);
         return mThreadHelper.get();
@@ -147,6 +147,8 @@ public:
      * @param[in] aTask   The task function.
      */
     void PostTimerTask(Milliseconds aDelay, TaskRunner::Task<void> aTask);
+
+    TaskRunner &GetTaskRunner(void) { return mTaskRunner; };
 
     /**
      * This method registers a reset handler.
@@ -191,10 +193,7 @@ public:
      *
      * @returns the applied FeatureFlagList's serialized bytes.
      */
-    const std::string &GetAppliedFeatureFlagListBytes(void)
-    {
-        return mAppliedFeatureFlagListBytes;
-    }
+    const std::string &GetAppliedFeatureFlagListBytes(void) { return mAppliedFeatureFlagListBytes; }
 #endif
 
     ~RcpHost(void) override;
@@ -221,16 +220,13 @@ public:
     void SetBorderAgentMeshCoPServiceChangedCallback(BorderAgentMeshCoPServiceChangedCallback aCallback) override;
     void AddEphemeralKeyStateChangedCallback(EphemeralKeyStateChangedCallback aCallback) override;
     void SetUdpForwardToHostCallback(UdpForwardToHostCallback aCallback) override;
+#if OTBR_ENABLE_BORDER_AGENT && !OTBR_ENABLE_BORDER_AGENT_MESHCOP_SERVICE
+    void SetBorderAgentVendorTxtData(const std::vector<uint8_t> &aVendorTxtData) override;
+#endif
 
-    CoprocessorType GetCoprocessorType(void) override
-    {
-        return OT_COPROCESSOR_RCP;
-    }
+    CoprocessorType GetCoprocessorType(void) override { return OT_COPROCESSOR_RCP; }
 
-    const char *GetCoprocessorVersion(void) override
-    {
-        return otPlatRadioGetVersionString(mInstance);
-    }
+    const char *GetCoprocessorVersion(void) override { return otPlatRadioGetVersionString(mInstance); }
 
 private:
     static void SafeInvokeAndClear(AsyncResultReceiver &aReceiver, otError aError, const std::string &aErrorInfo = "")
@@ -286,10 +282,10 @@ private:
 
     otInstance *mInstance;
 
-    otPlatformConfig                           mConfig;
-    std::unique_ptr<otbr::agent::ThreadHelper> mThreadHelper;
-    std::vector<std::function<void(void)>>     mResetHandlers;
-    TaskRunner                                 mTaskRunner;
+    otPlatformConfig                       mConfig;
+    std::unique_ptr<ThreadHelper>          mThreadHelper;
+    std::vector<std::function<void(void)>> mResetHandlers;
+    TaskRunner                             mTaskRunner;
 
     std::vector<ThreadStateChangedCallback>       mThreadStateChangedCallbacks;
     std::vector<ThreadEnabledStateCallback>       mThreadEnabledStateChangedCallbacks;

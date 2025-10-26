@@ -31,9 +31,9 @@ FROM ubuntu:24.04
 ARG GITHUB_REPO="openthread/ot-br-posix"
 ARG GIT_COMMIT="HEAD"
 ARG TARGETARCH
+ARG TARGETVARIANT
 
-ENV MDNS_RESPONDER_SOURCE_NAME=mDNSResponder-2600.100.147
-ENV S6_OVERLAY_VERSION=3.2.0.2
+ENV S6_OVERLAY_VERSION=3.2.1.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -52,10 +52,12 @@ RUN set -x \
            ninja-build \
            wget \
     \
-    && case "${TARGETARCH}" in \
-         amd64) S6_ARCH="x86_64" ;; \
-         arm64) S6_ARCH="aarch64" ;; \
-         *) echo "Unsupported architecture: ${TARGETARCH}"; exit 1 ;; \
+    && PLATFORM_SPEC="${TARGETARCH}${TARGETVARIANT:+/$TARGETVARIANT}" \
+    && case "${PLATFORM_SPEC}" in \
+         "amd64") S6_ARCH="x86_64" ;; \
+         "arm/v7") S6_ARCH="arm" ;; \
+         "arm64") S6_ARCH="aarch64" ;; \
+         *) echo "Unsupported architecture: ${PLATFORM_SPEC}"; exit 1 ;; \
        esac \
     && curl -L -f -s "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" \
         | tar Jxvf - -C / \
@@ -64,14 +66,6 @@ RUN set -x \
     \
     && git clone --depth 1 -b main https://github.com/"${GITHUB_REPO}".git \
     \
-    && (wget --no-check-certificate https://github.com/apple-oss-distributions/mDNSResponder/archive/refs/tags/$MDNS_RESPONDER_SOURCE_NAME.tar.gz \
-        && mkdir -p $MDNS_RESPONDER_SOURCE_NAME \
-        && tar xvf $MDNS_RESPONDER_SOURCE_NAME.tar.gz -C $MDNS_RESPONDER_SOURCE_NAME --strip-components=1 \
-        && cd $MDNS_RESPONDER_SOURCE_NAME \
-        && cd mDNSPosix \
-        && make os=linux tls=no \
-        && make install os=linux tls=no) \
-    \
     && cd ot-br-posix \
     && git fetch origin "${GIT_COMMIT}" \
     && git checkout "${GIT_COMMIT}" \
@@ -79,15 +73,9 @@ RUN set -x \
     && cmake -GNinja \
            -DBUILD_TESTING=OFF \
            -DCMAKE_INSTALL_PREFIX=/usr \
-           -DOTBR_BORDER_ROUTING=ON \
-           -DOTBR_BACKBONE_ROUTER=ON \
            -DOTBR_DBUS=OFF \
-           -DOTBR_MDNS=mDNSResponder \
-           -DOTBR_DNSSD_DISCOVERY_PROXY=ON \
-           -DOTBR_SRP_ADVERTISING_PROXY=ON \
-           -DOTBR_TREL=ON \
-           -DOTBR_NAT64=ON \
-           -DOTBR_DNS_UPSTREAM_QUERY=ON \
+           -DOTBR_MDNS=openthread \
+           -DOTBR_REST=ON \
            -DOT_POSIX_NAT64_CIDR="192.168.255.0/24" \
            -DOT_FIREWALL=ON \
     && ninja \

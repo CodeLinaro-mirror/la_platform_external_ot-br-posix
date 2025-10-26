@@ -154,6 +154,7 @@ cc_defaults {
         "-DOTBR_ENABLE_VENDOR_INFRA_LINK_SELECT=0",
 
         "-DOTBR_ENABLE_TREL=1",
+        "-DOTBR_ENABLE_TREL_DNSSD=1",
 
         // For the following 1.4 features, the `OTBR_ENABLE_*` macros are set to 0 because they
         // only guard code which deals with feature flagging or telemetry. Such code is targeting
@@ -169,6 +170,7 @@ cc_defaults {
 
     srcs: [
         "src/agent/application.cpp",
+        "src/agent/realmain.cpp",
         "src/android/android_rcp_host.cpp",
         "src/android/common_utils.cpp",
         "src/android/mdns_publisher.cpp",
@@ -178,7 +180,6 @@ cc_defaults {
         "src/backbone_router/backbone_agent.cpp",
         "src/border_agent/border_agent.cpp",
         "src/common/code_utils.cpp",
-        "src/common/dns_utils.cpp",
         "src/common/logging.cpp",
         "src/common/mainloop_manager.cpp",
         "src/common/mainloop.cpp",
@@ -188,6 +189,7 @@ cc_defaults {
         "src/host/async_task.cpp",
         "src/host/ncp_host.cpp",
         "src/host/ncp_spinel.cpp",
+        "src/host/thread_helper.cpp",
         "src/host/posix/cli_daemon.cpp",
         "src/host/posix/dnssd.cpp",
         "src/host/posix/infra_if.cpp",
@@ -209,7 +211,6 @@ cc_defaults {
         "src/utils/steering_data.cpp",
         "src/utils/string_utils.cpp",
         "src/utils/system_utils.cpp",
-        "src/utils/thread_helper.cpp",
     ],
 
     shared_libs: [

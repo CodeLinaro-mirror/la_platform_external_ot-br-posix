@@ -248,7 +248,7 @@ void RcpHost::Init(void)
     {
         otError result = otSetStateChangedCallback(mInstance, &RcpHost::HandleStateChanged, this);
 
-        agent::ThreadHelper::LogOpenThreadResult("Set state callback", result);
+        ThreadHelper::LogOpenThreadResult("Set state callback", result);
         VerifyOrExit(result == OT_ERROR_NONE, error = OTBR_ERROR_OPENTHREAD);
     }
 
@@ -290,7 +290,7 @@ void RcpHost::Init(void)
     otBorderAgentSetMeshCoPServiceChangedCallback(mInstance, RcpHost::HandleMeshCoPServiceChanged, this);
     otBorderAgentEphemeralKeySetCallback(mInstance, RcpHost::HandleEpskcStateChanged, this);
 
-    mThreadHelper = MakeUnique<otbr::agent::ThreadHelper>(mInstance, this);
+    mThreadHelper = MakeUnique<ThreadHelper>(mInstance, this);
 
     OtNetworkProperties::SetInstance(mInstance);
 
@@ -885,6 +885,16 @@ void RcpHost::AddEphemeralKeyStateChangedCallback(EphemeralKeyStateChangedCallba
 {
     mEphemeralKeyStateChangedCallbacks.push_back(aCallback);
 }
+
+#if OTBR_ENABLE_BORDER_AGENT && !OTBR_ENABLE_BORDER_AGENT_MESHCOP_SERVICE
+void RcpHost::SetBorderAgentVendorTxtData(const std::vector<uint8_t> &aVendorTxtData)
+{
+    VerifyOrExit(mInstance != nullptr);
+    otBorderAgentSetVendorTxtData(mInstance, aVendorTxtData.data(), aVendorTxtData.size());
+exit:
+    return;
+}
+#endif
 
 void RcpHost::SetUdpForwardToHostCallback(UdpForwardToHostCallback aCallback)
 {

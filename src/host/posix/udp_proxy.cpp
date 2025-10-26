@@ -35,6 +35,7 @@
 #include "host/posix/udp_proxy.hpp"
 
 #include <assert.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <unistd.h>
@@ -182,7 +183,7 @@ void UdpProxy::SendToPeer(const uint8_t      *aUdpPayload,
 #ifdef __APPLE__
     msg.msg_controllen = static_cast<socklen_t>(controlLength);
 #else
-    msg.msg_controllen           = controlLength;
+    msg.msg_controllen = controlLength;
 #endif
 
     rval = sendmsg(mFd, &msg, 0);

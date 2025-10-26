@@ -200,6 +200,10 @@
       <arg name="prefix" type="(ayy)"/>
     </method>
 
+    <method name="SetBorderAgentEnabled">
+      <arg name="enable" type="b" direction="in"/>
+    </method>
+
     <!-- UpdateMeshCopTxt: Update multiple entries in the TXT record.
       @key: The key of the entry.
       @value: The value of the entry.
@@ -712,6 +716,11 @@
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
     </property>
 
+    <!-- BorderAgentId: The 16 byte unique identifier for the border agent used in _meshcop._udp. advertisements -->
+    <property name="BorderAgentId" type="ay" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+    </property>
+
     <!-- RadioSpinelMetrics: The radio spinel metrics
     <literallayout>
         struct {
@@ -976,6 +985,11 @@
     </literallayout>
     -->
     <property name="TrelInfo" type="(bq(ttttt))" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+    </property>
+
+    <!-- MultiAilDetected: Whether multiple AILs are detected in the Thread network. -->
+    <property name="MultiAilDetected" type="b" access="read">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
     </property>
 

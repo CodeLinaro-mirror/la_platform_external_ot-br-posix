@@ -363,6 +363,47 @@ public final class FakeOtDaemonTest {
     }
 
     @Test
+    public void setInfraLinkInterfaceName_valueSavedAndOnSuccessIsInvoked() throws Exception {
+        IOtStatusReceiver receiver = mock(IOtStatusReceiver.class);
+        final String testInterfaceName = "wlan0";
+
+        mFakeOtDaemon.setInfraLinkInterfaceName(testInterfaceName, null /* fd */, receiver);
+        mTestLooper.dispatchAll();
+
+        assertThat(mFakeOtDaemon.getInfraLinkInterfaceName()).isEqualTo(testInterfaceName);
+        verify(receiver, never()).onError(anyInt(), any());
+        verify(receiver, times(1)).onSuccess();
+    }
+
+    @Test
+    public void setInfraLinkNat64Prefix_valueSavedAndOnSuccessIsInvoked() throws Exception {
+        IOtStatusReceiver receiver = mock(IOtStatusReceiver.class);
+        final String testNat64Prefix = "2001::db8::/96";
+
+        mFakeOtDaemon.setInfraLinkNat64Prefix(testNat64Prefix, receiver);
+        mTestLooper.dispatchAll();
+
+        assertThat(mFakeOtDaemon.getInfraLinkNat64Prefix()).isEqualTo(testNat64Prefix);
+        verify(receiver, never()).onError(anyInt(), any());
+        verify(receiver, times(1)).onSuccess();
+    }
+
+    @Test
+    public void setInfraLinkDnsServers_valueSavedAndOnSuccessIsInvoked() throws Exception {
+        IOtStatusReceiver receiver = mock(IOtStatusReceiver.class);
+        final List<String> testDnsServers = new ArrayList<>();
+        testDnsServers.add("8.8.8.8");
+        testDnsServers.add("8.8.4.4");
+
+        mFakeOtDaemon.setInfraLinkDnsServers(testDnsServers, receiver);
+        mTestLooper.dispatchAll();
+
+        assertThat(mFakeOtDaemon.getInfraLinkDnsServers()).isEqualTo(testDnsServers);
+        verify(receiver, never()).onError(anyInt(), any());
+        verify(receiver, times(1)).onSuccess();
+    }
+
+    @Test
     public void getChannelMasks_succeed_onSuccessIsInvoked() throws Exception {
         final AtomicInteger supportedChannelMaskRef = new AtomicInteger();
         final AtomicInteger preferredChannelMaskRef = new AtomicInteger();

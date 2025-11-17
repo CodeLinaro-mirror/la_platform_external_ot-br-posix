@@ -52,6 +52,7 @@
 #include <openthread/platform/infra_if.h>
 #include <openthread/platform/radio.h>
 
+#include "com_android_net_thread_flags.h"
 #include "agent/vendor.hpp"
 #include "android/android_rcp_host.hpp"
 #include "android/common_utils.hpp"
@@ -60,6 +61,8 @@
 #include "host/thread_host.hpp"
 
 #define BYTE_ARR_END(arr) ((arr) + sizeof(arr))
+
+namespace thread_flags = com::android::net::thread::flags;
 
 namespace otbr {
 
@@ -600,6 +603,11 @@ void OtDaemonServer::initializeInternal(const bool                              
     mMdnsPublisher.SetINsdPublisher(aINsdPublisher);
     mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
 
+    if (thread_flags::dnssd_rdp_enabled())
+    {
+        mAdvProxy.SetEnabled(aConfiguration.borderRouterEnabled);
+    }
+
     for (const auto &txtAttr : aMeshcopTxts.nonStandardTxtEntries)
     {
         nonStandardTxts.emplace_back(txtAttr.name.c_str(), txtAttr.value.data(), txtAttr.value.size());
@@ -758,8 +766,8 @@ exit:
     {
         if (error == OT_ERROR_NONE)
         {
-            mState.ephemeralKeyState          = GetEphemeralKeyState(otBorderAgentEphemeralKeyGetState(GetOtInstance()));
-            mState.ephemeralKeyPasscode       = passcode;
+            mState.ephemeralKeyState    = GetEphemeralKeyState(otBorderAgentEphemeralKeyGetState(GetOtInstance()));
+            mState.ephemeralKeyPasscode = passcode;
             mState.ephemeralKeyLifetimeMillis = aLifetimeMillis;
             mEphemeralKeyExpiryMillis         = std::chrono::duration_cast<std::chrono::milliseconds>(
                                             std::chrono::steady_clock::now().time_since_epoch())
@@ -1265,6 +1273,12 @@ Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration             
         if (aConfiguration != mAndroidHost->GetConfiguration())
         {
             mAdvProxy.SetAllowMlEid(!aConfiguration.borderRouterEnabled);
+
+            if (thread_flags::dnssd_rdp_enabled())
+            {
+                mAdvProxy.SetEnabled(aConfiguration.borderRouterEnabled);
+            }
+
             mBorderAgent.SetEnabled(mState.threadEnabled && aConfiguration.borderRouterEnabled);
             mAndroidHost->SetConfiguration(aConfiguration, aReceiver);
         }

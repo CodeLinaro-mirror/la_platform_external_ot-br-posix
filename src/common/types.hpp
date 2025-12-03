@@ -45,8 +45,6 @@
 #include <openthread/error.h>
 #include <openthread/ip6.h>
 
-#include "common/byteswap.hpp"
-
 #ifndef IN6ADDR_ANY
 /**
  * Any IPv6 address literal.
@@ -59,6 +57,7 @@
 #define OTBR_IP4_ADDRESS_SIZE 4
 #define OTBR_NETWORK_KEY_SIZE 16
 #define OTBR_PSKC_SIZE 16
+#define CHILD_MASK 0x1FF
 
 /**
  * Forward declaration for otIp6Prefix to avoid including <openthread/ip6.h>
@@ -233,7 +232,7 @@ public:
      *
      * @returns Whether the Ip6 address is a link-local address.
      */
-    bool IsLinkLocal(void) const { return (m16[0] & bswap_16(0xffc0)) == bswap_16(0xfe80); }
+    bool IsLinkLocal(void) const;
 
     /**
      * This method returns whether or not the Ip6 address is the Loopback Address.
@@ -241,7 +240,7 @@ public:
      * @retval TRUE   If the Ip6 address is the Loopback Address.
      * @retval FALSE  If the Ip6 address is not the Loopback Address.
      */
-    bool IsLoopback(void) const { return (m32[0] == 0 && m32[1] == 0 && m32[2] == 0 && m32[3] == htobe32(1)); }
+    bool IsLoopback(void) const;
 
     /**
      * Returns the IPv6 address scope.
@@ -312,6 +311,13 @@ public:
      * @param[in] aIn6Addr  The `in6_addr` structure to copy the Ip6 address from.
      */
     void CopyFrom(const struct in6_addr &aIn6Addr);
+
+    /**
+     * This method copies the Ip6 address to an `otIp6Address` structure.
+     *
+     * @param[out] aAddress  The `otIp6Address` structure to copy the Ip6 address to.
+     */
+    void CopyTo(otIp6Address &aAddress) const;
 
     union
     {

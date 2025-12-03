@@ -106,6 +106,9 @@ DBusThreadObjectRcp::DBusThreadObjectRcp(DBusConnection            &aConnection,
                                          const DependentComponents &aDeps)
     : DBusObject(&aConnection, OTBR_DBUS_OBJECT_PREFIX + aInterfaceName)
     , mHost(static_cast<Host::RcpHost &>(aDeps.mHost))
+#if OTBR_ENABLE_TELEMETRY_DATA_API
+    , mTelemetryRetriever(mHost.GetInstance())
+#endif
     , mPublisher(&aDeps.mPublisher)
 #if OTBR_ENABLE_BORDER_AGENT
     , mBorderAgent(aDeps.mBorderAgent)
@@ -156,6 +159,8 @@ otbrError DBusThreadObjectRcp::Init(void)
     RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_ATTACH_ALL_NODES_TO_METHOD,
                    std::bind(&DBusThreadObjectRcp::AttachAllNodesToHandler, this, _1));
 #if OTBR_ENABLE_BORDER_AGENT
+    RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_SET_BORDER_AGENT_ENABLED_METHOD,
+                   std::bind(&DBusThreadObjectRcp::SetBorderAgentEnabledHandler, this, _1));
     RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_UPDATE_VENDOR_MESHCOP_TXT_METHOD,
                    std::bind(&DBusThreadObjectRcp::UpdateMeshCopTxtHandler, this, _1));
 #endif
@@ -169,7 +174,7 @@ otbrError DBusThreadObjectRcp::Init(void)
                    std::bind(&DBusThreadObjectRcp::LeaveNetworkHandler, this, _1));
     RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_SET_NAT64_ENABLED_METHOD,
                    std::bind(&DBusThreadObjectRcp::SetNat64Enabled, this, _1));
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_ACTIVATE_EPHEMERAL_KEY_MODE_METHOD,
                    std::bind(&DBusThreadObjectRcp::ActivateEphemeralKeyModeHandler, this, _1));
     RegisterMethod(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_DEACTIVATE_EPHEMERAL_KEY_MODE_METHOD,
@@ -192,7 +197,7 @@ otbrError DBusThreadObjectRcp::Init(void)
                                std::bind(&DBusThreadObjectRcp::SetDnsUpstreamQueryState, this, _1));
     RegisterSetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_NAT64_CIDR,
                                std::bind(&DBusThreadObjectRcp::SetNat64Cidr, this, _1));
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     RegisterSetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_EPHEMERAL_KEY_ENABLED,
                                std::bind(&DBusThreadObjectRcp::SetEphemeralKeyEnabled, this, _1));
 #endif
@@ -228,6 +233,8 @@ otbrError DBusThreadObjectRcp::Init(void)
                                std::bind(&DBusThreadObjectRcp::GetRloc16Handler, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_EXTENDED_ADDRESS,
                                std::bind(&DBusThreadObjectRcp::GetExtendedAddressHandler, this, _1));
+    RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_BORDER_AGENT_ID,
+                               std::bind(&DBusThreadObjectRcp::GetBorderAgentIdHandler, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_ROUTER_ID,
                                std::bind(&DBusThreadObjectRcp::GetRouterIdHandler, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_LEADER_DATA,
@@ -300,7 +307,7 @@ otbrError DBusThreadObjectRcp::Init(void)
                                std::bind(&DBusThreadObjectRcp::GetNat64ErrorCounters, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_NAT64_CIDR,
                                std::bind(&DBusThreadObjectRcp::GetNat64Cidr, this, _1));
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_EPHEMERAL_KEY_ENABLED,
                                std::bind(&DBusThreadObjectRcp::GetEphemeralKeyEnabled, this, _1));
 #endif
@@ -308,6 +315,8 @@ otbrError DBusThreadObjectRcp::Init(void)
                                std::bind(&DBusThreadObjectRcp::GetInfraLinkInfo, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_TREL_INFO,
                                std::bind(&DBusThreadObjectRcp::GetTrelInfoHandler, this, _1));
+    RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_MULTI_AIL_DETECTED,
+                               std::bind(&DBusThreadObjectRcp::GetMultiAilDetectedHandler, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_DNS_UPSTREAM_QUERY_STATE,
                                std::bind(&DBusThreadObjectRcp::GetDnsUpstreamQueryState, this, _1));
     RegisterGetPropertyHandler(OTBR_DBUS_THREAD_INTERFACE, OTBR_DBUS_PROPERTY_TELEMETRY_DATA,
@@ -1154,7 +1163,7 @@ otError DBusThreadObjectRcp::GetExternalRoutesHandler(DBusMessageIter &aIter)
         ExternalRoute route;
 
         route.mPrefix.mPrefix      = std::vector<uint8_t>(&config.mPrefix.mPrefix.mFields.m8[0],
-                                                     &config.mPrefix.mPrefix.mFields.m8[OTBR_IP6_PREFIX_SIZE]);
+                                                          &config.mPrefix.mPrefix.mFields.m8[OTBR_IP6_PREFIX_SIZE]);
         route.mPrefix.mLength      = config.mPrefix.mLength;
         route.mRloc16              = config.mRloc16;
         route.mPreference          = config.mPreference;
@@ -1310,6 +1319,19 @@ exit:
 }
 
 #if OTBR_ENABLE_BORDER_AGENT
+void DBusThreadObjectRcp::SetBorderAgentEnabledHandler(DBusRequest &aRequest)
+{
+    otError error  = OT_ERROR_NONE;
+    bool    enable = false;
+    auto    args   = std::tie(enable);
+
+    VerifyOrExit(DBusMessageToTuple(*aRequest.GetMessage(), args) == OTBR_ERROR_NONE, error = OT_ERROR_INVALID_ARGS);
+    mBorderAgent.SetEnabled(enable);
+
+exit:
+    aRequest.ReplyOtResult(error);
+}
+
 void DBusThreadObjectRcp::UpdateMeshCopTxtHandler(DBusRequest &aRequest)
 {
     otError                                     error = OT_ERROR_NONE;
@@ -1486,14 +1508,29 @@ exit:
 #endif // OTBR_ENABLE_TREL
 }
 
+otError DBusThreadObjectRcp::GetMultiAilDetectedHandler(DBusMessageIter &aIter)
+{
+#if OTBR_ENABLE_MULTI_AIL
+    otError    error      = OT_ERROR_NONE;
+    const bool isDetected = otBorderRoutingIsMultiAilDetected(mHost.GetInstance());
+
+    SuccessOrExit(DBusMessageEncodeToVariant(&aIter, isDetected), error = OT_ERROR_INVALID_ARGS);
+exit:
+    return error;
+#else
+    OTBR_UNUSED_VARIABLE(aIter);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
+#endif
+}
+
 otError DBusThreadObjectRcp::GetTelemetryDataHandler(DBusMessageIter &aIter)
 {
 #if OTBR_ENABLE_TELEMETRY_DATA_API
     otError                      error = OT_ERROR_NONE;
     threadnetwork::TelemetryData telemetryData;
-    auto                         threadHelper = mHost.GetThreadHelper();
 
-    if (threadHelper->RetrieveTelemetryData(mPublisher, telemetryData) != OT_ERROR_NONE)
+    if (mTelemetryRetriever.RetrieveTelemetryData(mPublisher, telemetryData) != OT_ERROR_NONE)
     {
         otbrLogWarning("Some metrics were not populated in RetrieveTelemetryData");
     }
@@ -1615,6 +1652,22 @@ otError DBusThreadObjectRcp::GetEui64Handler(DBusMessageIter &aIter)
     eui64 = ConvertOpenThreadUint64(extAddr.m8);
 
     VerifyOrExit(DBusMessageEncodeToVariant(&aIter, eui64) == OTBR_ERROR_NONE, error = OT_ERROR_INVALID_ARGS);
+
+exit:
+    return error;
+}
+
+otError DBusThreadObjectRcp::GetBorderAgentIdHandler(DBusMessageIter &aIter)
+{
+    otBorderAgentId      id;
+    std::vector<uint8_t> data;
+    otError              error = OT_ERROR_NONE;
+
+    SuccessOrExit(error = otBorderAgentGetId(mHost.GetInstance(), &id));
+
+    data = {std::begin(id.mId), std::end(id.mId)};
+
+    VerifyOrExit(DBusMessageEncodeToVariant(&aIter, data) == OTBR_ERROR_NONE, error = OT_ERROR_INVALID_ARGS);
 
 exit:
     return error;
@@ -2039,7 +2092,7 @@ otError DBusThreadObjectRcp::SetNat64Cidr(DBusMessageIter &aIter)
 }
 #endif // OTBR_ENABLE_NAT64
 
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
 otError DBusThreadObjectRcp::GetEphemeralKeyEnabled(DBusMessageIter &aIter)
 {
     otError error = OT_ERROR_NONE;
@@ -2127,7 +2180,7 @@ exit:
         aRequest.ReplyOtResult(error);
     }
 }
-#endif // OTBR_ENABLE_BORDER_AGENT
+#endif // OTBR_ENABLE_EPSKC
 
 otError DBusThreadObjectRcp::GetInfraLinkInfo(DBusMessageIter &aIter)
 {

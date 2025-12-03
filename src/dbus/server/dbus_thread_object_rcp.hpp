@@ -43,6 +43,7 @@
 #include "border_agent/border_agent.hpp"
 #include "dbus/server/dbus_object.hpp"
 #include "host/rcp_host.hpp"
+#include "host/telemetry/telemetry.hpp"
 #include "mdns/mdns.hpp"
 
 namespace otbr {
@@ -99,6 +100,7 @@ private:
     void AddExternalRouteHandler(DBusRequest &aRequest);
     void RemoveExternalRouteHandler(DBusRequest &aRequest);
 #if OTBR_ENABLE_BORDER_AGENT
+    void SetBorderAgentEnabledHandler(DBusRequest &aRequest);
     void UpdateMeshCopTxtHandler(DBusRequest &aRequest);
 #endif
     void SetThreadEnabledHandler(DBusRequest &aRequest);
@@ -106,7 +108,7 @@ private:
     void GetPropertiesHandler(DBusRequest &aRequest);
     void LeaveNetworkHandler(DBusRequest &aRequest);
     void SetNat64Enabled(DBusRequest &aRequest);
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     void ActivateEphemeralKeyModeHandler(DBusRequest &aRequest);
     void DeactivateEphemeralKeyModeHandler(DBusRequest &aRequest);
 #endif
@@ -121,7 +123,7 @@ private:
     otError SetRadioRegionHandler(DBusMessageIter &aIter);
     otError SetDnsUpstreamQueryState(DBusMessageIter &aIter);
     otError SetNat64Cidr(DBusMessageIter &aIter);
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     otError SetEphemeralKeyEnabled(DBusMessageIter &aIter);
 #endif
 
@@ -131,6 +133,7 @@ private:
     otError GetPanIdHandler(DBusMessageIter &aIter);
     otError GetExtPanIdHandler(DBusMessageIter &aIter);
     otError GetEui64Handler(DBusMessageIter &aIter);
+    otError GetBorderAgentIdHandler(DBusMessageIter &aIter);
     otError GetChannelHandler(DBusMessageIter &aIter);
     otError GetNetworkKeyHandler(DBusMessageIter &aIter);
     otError GetCcaFailureRateHandler(DBusMessageIter &aIter);
@@ -169,6 +172,7 @@ private:
     otError GetRcpInterfaceMetricsHandler(DBusMessageIter &aIter);
     otError GetUptimeHandler(DBusMessageIter &aIter);
     otError GetTrelInfoHandler(DBusMessageIter &aIter);
+    otError GetMultiAilDetectedHandler(DBusMessageIter &aIter);
     otError GetRadioCoexMetrics(DBusMessageIter &aIter);
     otError GetBorderRoutingCountersHandler(DBusMessageIter &aIter);
     otError GetNat64State(DBusMessageIter &aIter);
@@ -176,7 +180,7 @@ private:
     otError GetNat64Mappings(DBusMessageIter &aIter);
     otError GetNat64ProtocolCounters(DBusMessageIter &aIter);
     otError GetNat64ErrorCounters(DBusMessageIter &aIter);
-#if OTBR_ENABLE_BORDER_AGENT
+#if OTBR_ENABLE_EPSKC
     otError GetEphemeralKeyEnabled(DBusMessageIter &aIter);
 #endif
     otError GetInfraLinkInfo(DBusMessageIter &aIter);
@@ -187,9 +191,13 @@ private:
     void ReplyScanResult(DBusRequest &aRequest, otError aError, const std::vector<otActiveScanResult> &aResult);
     void ReplyEnergyScanResult(DBusRequest &aRequest, otError aError, const std::vector<otEnergyScanResult> &aResult);
 
-    otbr::Host::RcpHost                                 &mHost;
+    otbr::Host::RcpHost &mHost;
+#if OTBR_ENABLE_TELEMETRY_DATA_API
+    otbr::Host::TelemetryRetriever mTelemetryRetriever;
+#endif
     std::unordered_map<std::string, PropertyHandlerType> mGetPropertyHandlers;
     otbr::Mdns::Publisher                               *mPublisher;
+
 #if OTBR_ENABLE_BORDER_AGENT
     otbr::BorderAgent &mBorderAgent;
 #endif

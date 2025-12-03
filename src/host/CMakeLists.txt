@@ -27,8 +27,9 @@
 #
 
 add_subdirectory(posix)
+add_subdirectory(telemetry)
 
-add_library(otbr-ncp
+add_library(otbr-host
     async_task.cpp
     async_task.hpp
     ncp_host.cpp
@@ -37,13 +38,17 @@ add_library(otbr-ncp
     ncp_spinel.hpp
     rcp_host.cpp
     rcp_host.hpp
+    thread_helper.cpp
+    thread_helper.hpp
     thread_host.cpp
     thread_host.hpp
 )
 
-target_link_libraries(otbr-ncp PRIVATE
-    otbr-common
-    otbr-posix
-    $<$<BOOL:${OTBR_FEATURE_FLAGS}>:otbr-proto>
-    $<$<BOOL:${OTBR_TELEMETRY_DATA_API}>:otbr-proto>
+target_link_libraries(otbr-host
+    PUBLIC
+        openthread-ftd
+        $<$<BOOL:${OTBR_FEATURE_FLAGS}>:otbr-proto>
+    PRIVATE
+        otbr-common
+        otbr-posix
 )

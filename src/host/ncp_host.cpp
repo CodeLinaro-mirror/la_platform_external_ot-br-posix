@@ -253,6 +253,16 @@ void NcpHost::AddThreadEnabledStateChangedCallback(ThreadEnabledStateCallback aC
     OT_UNUSED_VARIABLE(aCallback);
 }
 
+void NcpHost::SetHostPowerState(uint8_t aState, const AsyncResultReceiver &aReceiver)
+{
+    AsyncTaskPtr task;
+    auto errorHandler = [aReceiver](otError aError, const std::string &aErrorInfo) { aReceiver(aError, aErrorInfo); };
+
+    task = std::make_shared<AsyncTask>(errorHandler);
+    task->First([this, aState](AsyncTaskPtr aNext) { mNcpSpinel.SetHostPowerState(aState, std::move(aNext)); });
+    task->Run();
+}
+
 #if OTBR_ENABLE_BACKBONE_ROUTER
 void NcpHost::SetBackboneRouterEnabled(bool aEnabled)
 {
@@ -280,6 +290,14 @@ void NcpHost::AddEphemeralKeyStateChangedCallback(EphemeralKeyStateChangedCallba
     OTBR_UNUSED_VARIABLE(aCallback);
 }
 
+#if OTBR_ENABLE_BORDER_AGENT && !OTBR_ENABLE_BORDER_AGENT_MESHCOP_SERVICE
+void NcpHost::SetBorderAgentVendorTxtData(const std::vector<uint8_t> &aVendorTxtData)
+{
+    // To be implemented
+    OTBR_UNUSED_VARIABLE(aVendorTxtData);
+}
+#endif
+
 void NcpHost::Process(const MainloopContext &aMainloop)
 {
     mSpinelDriver.Process(&aMainloop);
@@ -299,12 +317,14 @@ void NcpHost::Update(MainloopContext &aMainloop)
     mCliDaemon.UpdateFdSet(aMainloop);
 }
 
-#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
+#if OTBR_ENABLE_MDNS
 void NcpHost::SetMdnsPublisher(Mdns::Publisher *aPublisher)
 {
     mNcpSpinel.SetMdnsPublisher(aPublisher);
 }
+#endif
 
+#if OTBR_ENABLE_SRP_ADVERTISING_PROXY
 void NcpHost::HandleMdnsState(Mdns::Publisher::State aState)
 {
     mNcpSpinel.DnssdSetState(aState);

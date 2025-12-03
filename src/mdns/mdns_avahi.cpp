@@ -514,7 +514,7 @@ otbrError PublisherAvahi::Start(void)
 
 bool PublisherAvahi::IsStarted(void) const
 {
-    return mClient != nullptr;
+    return mClient != nullptr && mState == Mdns::Publisher::State::kReady;
 }
 
 void PublisherAvahi::Stop(void)
@@ -676,7 +676,7 @@ void PublisherAvahi::HandleClientState(AvahiClient *aClient, AvahiClientState aS
         // with the new host name.
         otbrLogErr("Avahi client collision detected: %s", avahi_strerror(avahi_client_errno(aClient)));
 
-        // fall through
+        OT_FALL_THROUGH;
 
     case AVAHI_CLIENT_S_REGISTERING:
         // The server records are now being established. This might be
@@ -749,8 +749,8 @@ otbrError PublisherAvahi::PublishServiceImpl(const std::string &aHostName,
     avahiError = avahi_entry_group_commit(group);
     VerifyOrExit(avahiError == AVAHI_OK);
 
-    AddServiceRegistration(std::unique_ptr<AvahiServiceRegistration>(new AvahiServiceRegistration(
-        aHostName, serviceName, aType, sortedSubTypeList, aPort, aTxtData, std::move(aCallback), group, this)));
+    AddServiceRegistration(std::make_shared<AvahiServiceRegistration>(
+        aHostName, serviceName, aType, sortedSubTypeList, aPort, aTxtData, std::move(aCallback), group, this));
 
 exit:
     if (avahiError != AVAHI_OK || error != OTBR_ERROR_NONE)
@@ -815,8 +815,7 @@ otbrError PublisherAvahi::PublishHostImpl(const std::string &aName,
     avahiError = avahi_entry_group_commit(group);
     VerifyOrExit(avahiError == AVAHI_OK);
 
-    AddHostRegistration(std::unique_ptr<AvahiHostRegistration>(
-        new AvahiHostRegistration(aName, aAddresses, std::move(aCallback), group, this)));
+    AddHostRegistration(std::make_shared<AvahiHostRegistration>(aName, aAddresses, std::move(aCallback), group, this));
 
 exit:
     if (avahiError != AVAHI_OK || error != OTBR_ERROR_NONE)
@@ -873,8 +872,7 @@ otbrError PublisherAvahi::PublishKeyImpl(const std::string &aName, const KeyData
     avahiError = avahi_entry_group_commit(group);
     VerifyOrExit(avahiError == AVAHI_OK);
 
-    AddKeyRegistration(std::unique_ptr<AvahiKeyRegistration>(
-        new AvahiKeyRegistration(aName, aKeyData, std::move(aCallback), group, this)));
+    AddKeyRegistration(std::make_shared<AvahiKeyRegistration>(aName, aKeyData, std::move(aCallback), group, this));
 
 exit:
     if (avahiError != AVAHI_OK || error != OTBR_ERROR_NONE)

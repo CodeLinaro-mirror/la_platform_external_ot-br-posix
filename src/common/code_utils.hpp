@@ -63,8 +63,8 @@
 
 #ifndef CONTAINING_RECORD
 #define BASE 0x1
-#define myoffsetof(s, m) (((size_t) & (((s *)BASE)->m)) - BASE)
-#define CONTAINING_RECORD(address, type, field) ((type *)((uint8_t *)(address)-myoffsetof(type, field)))
+#define myoffsetof(s, m) (((size_t)&(((s *)BASE)->m)) - BASE)
+#define CONTAINING_RECORD(address, type, field) ((type *)((uint8_t *)(address) - myoffsetof(type, field)))
 #endif /* CONTAINING_RECORD */
 
 /**
@@ -121,6 +121,25 @@
     } while (false)
 
 /**
+ *  This checks for the specified condition, which is expected to
+ *  commonly be true, and return @a aReturn if the condition is false.
+ *
+ *  @param[in] aCondition  A Boolean expression to be evaluated.
+ *  @param[in] aReturn     The value to return.
+ */
+#define VerifyOrReturn(aCondition, aReturn) \
+    do                                      \
+    {                                       \
+        if (aCondition)                     \
+        {                                   \
+        }                                   \
+        else                                \
+        {                                   \
+            return (aReturn);               \
+        }                                   \
+    } while (false)
+
+/**
  * This macro checks for the specified condition, which is expected to commonly be true,
  * and both prints the message and terminates the program if the condition is false.
  *
@@ -166,6 +185,20 @@
         __VA_ARGS__; \
         goto exit;   \
     } while (false)
+
+/**
+ * Ignores an error explicitly.
+ *
+ * This is primarily used to indicate the intention of developer that
+ * the error can be safely ignored or there is guaranteed to be no error.
+ *
+ * @param[in]  aError  The error to be ignored.
+ *
+ */
+static inline void IgnoreError(otError aError)
+{
+    OT_UNUSED_VARIABLE(aError);
+}
 
 #define OTBR_NOOP
 #define OTBR_UNUSED_VARIABLE(variable) ((void)(variable))

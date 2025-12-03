@@ -75,7 +75,7 @@ std::shared_ptr<VendorServer> VendorServer::newInstance(Application &aApplicatio
         static_cast<otbr::Android::MdnsPublisher &>(aApplication.GetPublisher()), aApplication.GetBorderAgent(),
         aApplication.GetAdvertisingProxy(), [&aApplication]() {
             aApplication.Deinit();
-            aApplication.Init();
+            aApplication.Init(/* aRestListenAddress */"", /* aRestListenPort */0);
         });
 }
 
@@ -210,6 +210,11 @@ void OtDaemonServer::StateCallback(otChangedFlags aFlags)
             onMeshPrefixes.assign(mOnMeshPrefixes.begin(), mOnMeshPrefixes.end());
             mCallback->onPrefixChanged(onMeshPrefixes);
         }
+    }
+
+    if ((aFlags & OT_CHANGED_THREAD_ROLE))
+    {
+        mBorderAgent.SetEnabled(isAttached() && mAndroidHost->GetConfiguration().borderRouterEnabled);
     }
 }
 
@@ -619,7 +624,6 @@ void OtDaemonServer::initializeInternal(const bool                              
         otbrLogCrit("Failed to set MeshCoP values: %d", static_cast<int>(error));
     }
 
-    mBorderAgent.SetEnabled(aEnabled && aConfiguration.borderRouterEnabled);
     mAndroidHost->SetTrelEnabled(aTrelEnabled);
     mTrelEnabled = aTrelEnabled;
 
@@ -654,11 +658,6 @@ void OtDaemonServer::UpdateThreadEnabledState(const int enabled, const std::shar
     {
         aReceiver->onSuccess();
     }
-
-    // Enables the BorderAgent module only when Thread is enabled and configured a Border Router,
-    // so that it won't publish the MeshCoP mDNS service when unnecessary
-    // TODO: b/376217403 - enables / disables OT Border Agent at runtime
-    mBorderAgent.SetEnabled(enabled == OT_STATE_ENABLED && mAndroidHost->GetConfiguration().borderRouterEnabled);
 
     NotifyStateChanged(/* aListenerId*/ -1);
 
@@ -1279,7 +1278,7 @@ Status OtDaemonServer::setConfiguration(const OtDaemonConfiguration             
                 mAdvProxy.SetEnabled(aConfiguration.borderRouterEnabled);
             }
 
-            mBorderAgent.SetEnabled(mState.threadEnabled && aConfiguration.borderRouterEnabled);
+            mBorderAgent.SetEnabled(isAttached() && aConfiguration.borderRouterEnabled);
             mAndroidHost->SetConfiguration(aConfiguration, aReceiver);
         }
     });

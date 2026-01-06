@@ -60,16 +60,6 @@
 #endif
 #include "proto/capabilities.pb.h"
 
-/**
- * @def OTBR_CONFIG_BORDER_AGENT_MESHCOP_E_UDP_PORT
- *
- * Specifies the border agent UDP port for meshcop-e service.
- * If zero, an ephemeral port will be used.
- */
-#ifndef OTBR_CONFIG_BORDER_AGENT_MESHCOP_E_UDP_PORT
-#define OTBR_CONFIG_BORDER_AGENT_MESHCOP_E_UDP_PORT 0
-#endif
-
 using std::placeholders::_1;
 using std::placeholders::_2;
 
@@ -1348,6 +1338,23 @@ void DBusThreadObjectRcp::UpdateMeshCopTxtHandler(DBusRequest &aRequest)
     {
         VerifyOrExit(!update.count(reservedKey), error = OT_ERROR_INVALID_ARGS);
     }
+
+    // Border Agent in OT core manages registering/updating of the
+    // mDNS MeshCoP service(s) on the infrastructure link.
+    // Here explicitly sets `id` from application and prefers it over
+    // the random generated one in the meshcop Txt payload composed.
+
+    if (update.count("id"))
+    {
+        otBorderAgentId id;
+        const auto     &idVec = update.at("id");
+
+        VerifyOrExit(idVec.size() == sizeof(id.mId), error = OT_ERROR_INVALID_ARGS);
+        memcpy(id.mId, idVec.data(), sizeof(id.mId));
+        SuccessOrExit(error = otBorderAgentSetId(mHost.GetInstance(), &id));
+        update.erase("id");
+    }
+
     mBorderAgent.UpdateVendorMeshCoPTxtEntries(update);
 
 exit:

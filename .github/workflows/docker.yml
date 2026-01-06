@@ -48,9 +48,9 @@ jobs:
       OTBR_COVERAGE: 1
       VERBOSE: 1
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
-        submodules: true
+        submodules: recursive
     - name: Bootstrap
       env:
         BUILD_TARGET: "docker-check"
@@ -83,7 +83,7 @@ jobs:
               --build-arg NAT64=0
               --build-arg WEB_GUI=0
               --build-arg REST_API=0
-              --build-arg OTBR_OPTIONS='-DOTBR_DUA_ROUTING=ON -DOT_DUA=ON'
+              --build-arg OTBR_OPTIONS='-DOTBR_DUA_ROUTING=ON -DOT_DUA=ON -DOTBR_OT_DISCOVERY_PROXY=OFF'
             platforms: "linux/amd64,linux/arm/v7,linux/arm64"
             push: yes
           - image_tag: "test"
@@ -95,9 +95,9 @@ jobs:
             platforms: "linux/amd64,linux/arm/v7,linux/arm64"
             push: no
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
-        submodules: true
+        submodules: recursive
 
     - name: Prepare
       id: prepare

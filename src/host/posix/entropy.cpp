@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2024, The OpenThread Authors.
+ *  Copyright (c) 2025, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -27,40 +27,39 @@
  */
 
 /**
- * @brief   Implements APIs used for conversions of data from one form to another.
+ * @file
+ *   This file implements the posix platform Entropy.
  */
-#ifndef REST_SERVER_COMMON_HPP_
-#define REST_SERVER_COMMON_HPP_
 
-#include "host/thread_helper.hpp"
+#include "entropy.hpp"
+
+#include "common/code_utils.hpp"
+#include "common/types.hpp"
 
 namespace otbr {
-namespace rest {
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-#include <openthread/error.h>
+otbrError Entropy::GetEntropy(uint8_t *aOutput, uint16_t aOutputLength)
+{
+    otbrError error = OTBR_ERROR_NONE;
 
-// Function to combine Mesh Local Prefix and IID to form an IPv6 address
-void combineMeshLocalPrefixAndIID(const otMeshLocalPrefix        *meshLocalPrefix,
-                                  const otIp6InterfaceIdentifier *iid,
-                                  otIp6Address                   *ip6Address);
+    FILE  *file = nullptr;
+    size_t readLength;
 
-/**
- * @brief   str_to_m8, is designed to convert a string of hexadecimal characters
- *          into an array of bytes (uint8_t). It performs this conversion by processing
- *          each pair of hexadecimal characters in the input string, converting them
- *          into their corresponding byte value, and storing the result in the provided array.
- * @param   uint8_t *m8: A pointer to the array where the converted bytes will be stored.
- * @param   const char *str: A pointer to the input string containing hexadecimal characters.
- * @param   uint8_t size: The number of bytes that the m8 array can hold, which dictates how many characters from str
- * should be processed.
- * @return    The function returns an otError code, indicating the success or failure of the conversion process.
- */
-otError str_to_m8(uint8_t *m8, const char *str, uint8_t size);
+    VerifyOrExit(aOutput && aOutputLength, error = OTBR_ERROR_INVALID_ARGS);
 
-} // namespace rest
+    file = fopen("/dev/urandom", "rb");
+    VerifyOrExit(file != nullptr, error = OTBR_ERROR_ERRNO);
+
+    readLength = fread(aOutput, 1, aOutputLength, file);
+    VerifyOrExit(readLength == aOutputLength, error = OTBR_ERROR_ERRNO);
+
+exit:
+
+    if (file != nullptr)
+    {
+        fclose(file);
+    }
+    return error;
+}
+
 } // namespace otbr
-
-#endif // REST_SERVER_COMMON_HPP_

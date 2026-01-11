@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2024, The OpenThread Authors.
+ *  Copyright (c) 2025, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -27,40 +27,35 @@
  */
 
 /**
- * @brief   Implements APIs used for conversions of data from one form to another.
+ * @file
+ *   This file includes definitions of the posix Entropy of otbr-agent.
  */
-#ifndef REST_SERVER_COMMON_HPP_
-#define REST_SERVER_COMMON_HPP_
 
-#include "host/thread_helper.hpp"
+#ifndef OTBR_AGENT_POSIX_ENTROPY_HPP_
+#define OTBR_AGENT_POSIX_ENTROPY_HPP_
+
+#include <stdint.h>
+
+#include "common/types.hpp"
 
 namespace otbr {
-namespace rest {
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-#include <openthread/error.h>
+class Entropy
+{
+public:
+    /**
+     * Fill buffer with entropy.
+     *
+     * @param[out]  aOutput              A pointer to where the random values are placed.  Must not be NULL.
+     * @param[in]   aOutputLength        Size of @p aOutput.
+     *
+     * @retval OTBR_ERROR_NONE          Successfully filled @p aOutput with true random values.
+     * @retval OTBR_ERROR_ERRNO         Failed to fill @p aOutput with true random values.
+     * @retval OTBR_ERROR_INVALID_ARGS  @p aOutput was set to NULL or @p aOutputLength is 0.
+     */
+    static otbrError GetEntropy(uint8_t *aOutput, uint16_t aOutputLength);
+};
 
-// Function to combine Mesh Local Prefix and IID to form an IPv6 address
-void combineMeshLocalPrefixAndIID(const otMeshLocalPrefix        *meshLocalPrefix,
-                                  const otIp6InterfaceIdentifier *iid,
-                                  otIp6Address                   *ip6Address);
-
-/**
- * @brief   str_to_m8, is designed to convert a string of hexadecimal characters
- *          into an array of bytes (uint8_t). It performs this conversion by processing
- *          each pair of hexadecimal characters in the input string, converting them
- *          into their corresponding byte value, and storing the result in the provided array.
- * @param   uint8_t *m8: A pointer to the array where the converted bytes will be stored.
- * @param   const char *str: A pointer to the input string containing hexadecimal characters.
- * @param   uint8_t size: The number of bytes that the m8 array can hold, which dictates how many characters from str
- * should be processed.
- * @return    The function returns an otError code, indicating the success or failure of the conversion process.
- */
-otError str_to_m8(uint8_t *m8, const char *str, uint8_t size);
-
-} // namespace rest
 } // namespace otbr
 
-#endif // REST_SERVER_COMMON_HPP_
+#endif // OTBR_AGENT_POSIX_ENTROPY_HPP_

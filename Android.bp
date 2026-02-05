@@ -107,12 +107,13 @@ cc_defaults {
     name: "ot-daemon-defaults",
     generated_headers: ["otbr_version_header"],
 
+    header_libs: ["libmbedtls_headers"],
+
     include_dirs: [
         "external/mdnsresponder/mDNSShared",
         "external/openthread/include",
         "external/openthread/src",
         "external/openthread/src/posix/platform/include",
-        "external/openthread/third_party/mbedtls/repo/include",
     ],
 
     local_include_dirs: [

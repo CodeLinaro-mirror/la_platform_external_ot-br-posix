@@ -167,6 +167,10 @@ cc_defaults {
 
         // Used for the SetChannelMaxPowers API.
         "-DOTBR_ENABLE_POWER_CALIBRATION=1",
+
+        // It's enforced to configure a default vendor name and product name.
+	"-DOTBR_VENDOR_NAME=\"OpenThread\"",
+	"-DOTBR_PRODUCT_NAME=\"BorderRouter\"",
     ],
 
     srcs: [

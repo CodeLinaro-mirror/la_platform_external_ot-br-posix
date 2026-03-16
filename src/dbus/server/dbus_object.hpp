@@ -100,13 +100,6 @@ public:
     virtual otbrError Init(void);
 
     /**
-     * This method de-initializes the d-bus object.
-     *
-     * This method will unregister the object from the d-bus library.
-     */
-    virtual void Deinit(void);
-
-    /**
      * This method registers the method handler.
      *
      * @param[in] aInterfaceName  The interface name.

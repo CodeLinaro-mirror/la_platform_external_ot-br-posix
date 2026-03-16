@@ -49,12 +49,7 @@ RUN set -x \
            git \
            ipset \
            iptables \
-           libjsoncpp-dev \
-           libjsoncpp25 \
            ninja-build \
-           nodejs \
-           npm \
-           pkg-config \
            wget \
     \
     && PLATFORM_SPEC="${TARGETARCH}${TARGETVARIANT:+/$TARGETVARIANT}" \
@@ -75,22 +70,16 @@ RUN set -x \
     && git fetch origin "${GIT_COMMIT}" \
     && git checkout "${GIT_COMMIT}" \
     && git submodule update --depth 1 --init --recursive \
-    \
-    && (mkdir build \
-        && cd build \
-        && cmake -GNinja \
-               -DBUILD_TESTING=OFF \
-               -DCMAKE_INSTALL_PREFIX=/usr \
-               -DOTBR_DBUS=OFF \
-               -DOTBR_MDNS=openthread \
-               -DOTBR_REST=ON \
-               -DOTBR_WEB=ON \
-               -DOT_POSIX_NAT64_CIDR="192.168.255.0/24" \
-               -DOT_FIREWALL=ON \
-               .. \
-        && ninja \
-        && ninja install) \
-    \
+    && cmake -GNinja \
+           -DBUILD_TESTING=OFF \
+           -DCMAKE_INSTALL_PREFIX=/usr \
+           -DOTBR_DBUS=OFF \
+           -DOTBR_MDNS=openthread \
+           -DOTBR_REST=ON \
+           -DOT_POSIX_NAT64_CIDR="192.168.255.0/24" \
+           -DOT_FIREWALL=ON \
+    && ninja \
+    && ninja install \
     && cp -r etc/docker/border-router/rootfs/. / \
     && apt-get purge -y --auto-remove \
            build-essential \
@@ -98,11 +87,7 @@ RUN set -x \
            cmake \
            curl \
            git \
-           libjsoncpp-dev \
            ninja-build \
-           nodejs \
-           npm \
-           pkg-config \
            wget \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/src/*

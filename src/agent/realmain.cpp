@@ -61,7 +61,6 @@
 #ifndef __ANDROID__
 #error "OTBR_ENABLE_PLATFORM_ANDROID can be enabled for only Android devices"
 #endif
-#define OTBR_ENABLE_PLATFORM_RESET_EXIT
 #endif
 
 #define DEFAULT_INTERFACE_NAME "wpan0"
@@ -81,20 +80,13 @@ enum
     OTBR_OPT_SYSLOG_DISABLE          = 's',
     OTBR_OPT_VERSION                 = 'V',
     OTBR_OPT_SHORTMAX                = 128,
-    OTBR_OPT_DATA_PATH,
     OTBR_OPT_RADIO_VERSION,
     OTBR_OPT_AUTO_ATTACH,
     OTBR_OPT_REST_LISTEN_ADDR,
     OTBR_OPT_REST_LISTEN_PORT,
-#ifndef OTBR_VENDOR_NAME
-    OTBR_OPT_VENDOR_NAME,
-#endif
-#ifndef OTBR_PRODUCT_NAME
-    OTBR_OPT_MODEL_NAME,
-#endif
 };
 
-#ifndef OTBR_ENABLE_PLATFORM_RESET_EXIT
+#ifndef OTBR_ENABLE_PLATFORM_ANDROID
 static jmp_buf sResetJump;
 #endif
 static otbr::Application *gApp = nullptr;
@@ -102,7 +94,6 @@ static otbr::Application *gApp = nullptr;
 void                       __gcov_flush();
 static const struct option kOptions[] = {
     {"backbone-ifname", required_argument, nullptr, OTBR_OPT_BACKBONE_INTERFACE_NAME},
-    {"data-path", required_argument, nullptr, OTBR_OPT_DATA_PATH},
     {"debug-level", required_argument, nullptr, OTBR_OPT_DEBUG_LEVEL},
     {"help", no_argument, nullptr, OTBR_OPT_HELP},
     {"thread-ifname", required_argument, nullptr, OTBR_OPT_INTERFACE_NAME},
@@ -113,12 +104,6 @@ static const struct option kOptions[] = {
     {"auto-attach", optional_argument, nullptr, OTBR_OPT_AUTO_ATTACH},
     {"rest-listen-address", required_argument, nullptr, OTBR_OPT_REST_LISTEN_ADDR},
     {"rest-listen-port", required_argument, nullptr, OTBR_OPT_REST_LISTEN_PORT},
-#ifndef OTBR_VENDOR_NAME
-    {"vendor-name", required_argument, nullptr, OTBR_OPT_VENDOR_NAME},
-#endif
-#ifndef OTBR_PRODUCT_NAME
-    {"model-name", required_argument, nullptr, OTBR_OPT_MODEL_NAME},
-#endif
     {0, 0, 0, 0}};
 
 static bool ParseInteger(const char *aStr, long &aOutResult)
@@ -139,7 +124,7 @@ exit:
     return successful;
 }
 
-#ifndef OTBR_ENABLE_PLATFORM_RESET_EXIT
+#ifndef OTBR_ENABLE_PLATFORM_ANDROID
 static constexpr char kAutoAttachDisableArg[] = "--auto-attach=0";
 static char           sAutoAttachDisableArgStorage[sizeof(kAutoAttachDisableArg)];
 
@@ -164,7 +149,6 @@ static void PrintHelp(const char *aProgramName)
     fprintf(stderr,
             "Usage: %s [-I interfaceName] [-B backboneIfName] [-d DEBUG_LEVEL] [-v] [-s] [--auto-attach[=0/1]] "
             "RADIO_URL [RADIO_URL]\n"
-            "         --data-path        Path of directory to store data.\n"
             "     -I, --thread-ifname    Name of the Thread network interface (default: " DEFAULT_INTERFACE_NAME ").\n"
             "     -B, --backbone-ifname  Name of the backbone network interfaces (can be specified multiple times).\n"
             "     -d, --debug-level      The log level (EMERG=0, ALERT=1, CRIT=2, ERR=3, WARNING=4, NOTICE=5, INFO=6, "
@@ -177,15 +161,9 @@ static void PrintHelp(const char *aProgramName)
             "     --auto-attach          Whether or not to automatically attach to the saved network (default: 1).\n"
             "     --rest-listen-address  Network address to listen on for the REST API (default: 127.0.0.1).\n"
             "     --rest-listen-port     Network port to listen on for the REST API "
-            "(default: " HELP_DEFAULT_REST_PORT_NUMBER ").\n",
+            "(default: " HELP_DEFAULT_REST_PORT_NUMBER ").\n"
+            "\n",
             aProgramName);
-#ifndef OTBR_VENDOR_NAME
-    fprintf(stderr, "     --vendor-name          Vendor Name.\n");
-#endif
-#ifndef OTBR_PRODUCT_NAME
-    fprintf(stderr, "     --model-name           Model Name.\n");
-#endif
-    fprintf(stderr, "\n");
     fprintf(stderr, "%s", otSysGetRadioUrlHelpString());
 }
 
@@ -252,21 +230,9 @@ static int realmain(int argc, char *argv[])
     bool                      enableAutoAttach  = true;
     const char               *restListenAddress = "127.0.0.1";
     int                       restListenPort    = kPortNumber;
-    const char               *dataPath          = "";
     std::vector<const char *> radioUrls;
     std::vector<const char *> backboneInterfaceNames;
     long                      parseResult;
-
-#ifdef OTBR_VENDOR_NAME
-    const char *vendorName = OTBR_VENDOR_NAME;
-#else
-    const char *vendorName = nullptr;
-#endif
-#ifdef OTBR_PRODUCT_NAME
-    const char *productName = OTBR_PRODUCT_NAME;
-#else
-    const char *productName = nullptr;
-#endif
 
     std::set_new_handler(OnAllocateFailed);
 
@@ -330,19 +296,6 @@ static int realmain(int argc, char *argv[])
             VerifyOrExit(ParseInteger(optarg, parseResult), ret = EXIT_FAILURE);
             restListenPort = parseResult;
             break;
-#ifndef OTBR_VENDOR_NAME
-        case OTBR_OPT_VENDOR_NAME:
-            vendorName = optarg;
-            break;
-#endif
-#ifndef OTBR_PRODUCT_NAME
-        case OTBR_OPT_MODEL_NAME:
-            productName = optarg;
-            break;
-#endif
-        case OTBR_OPT_DATA_PATH:
-            dataPath = optarg;
-            break;
 
         default:
             PrintHelp(argv[0]);
@@ -350,21 +303,6 @@ static int realmain(int argc, char *argv[])
             break;
         }
     }
-
-#ifndef OTBR_VENDOR_NAME
-    if (vendorName == nullptr)
-    {
-        fprintf(stderr, "Vendor name must be set.\n");
-        ExitNow(ret = EXIT_FAILURE);
-    }
-#endif
-#ifndef OTBR_PRODUCT_NAME
-    if (productName == nullptr)
-    {
-        fprintf(stderr, "Model name must be set.\n");
-        ExitNow(ret = EXIT_FAILURE);
-    }
-#endif
 
     otbrLogInit(argv[0], logLevel, verbose, syslogDisable);
     otbrLogNotice("Running %s", OTBR_PACKAGE_VERSION);
@@ -400,46 +338,12 @@ static int realmain(int argc, char *argv[])
         const std::string backboneInterfaceName = backboneInterfaceNames.empty() ? "" : backboneInterfaceNames.front();
 #endif
         std::unique_ptr<otbr::Host::ThreadHost> host = otbr::Host::ThreadHost::Create(
-            interfaceName, radioUrls, backboneInterfaceName.c_str(), /* aDryRun */ false, enableAutoAttach, dataPath);
+            interfaceName, radioUrls, backboneInterfaceName.c_str(), /* aDryRun */ false, enableAutoAttach);
 
         otbr::Application app(*host, interfaceName, backboneInterfaceName);
 
         gApp = &app;
-
-#if OTBR_ENABLE_BORDER_AGENT
-#if !defined(OTBR_VENDOR_NAME) || !defined(OTBR_PRODUCT_NAME)
-#ifdef OTBR_MESHCOP_SERVICE_INSTANCE_NAME
-        SuccessOrExit(app.GetBorderAgent().SetMeshCoPServiceValues(OTBR_MESHCOP_SERVICE_INSTANCE_NAME, productName,
-                                                                   vendorName, {}, {}),
-                      ret = EXIT_FAILURE);
-#else
-        char instanceName[otbr::kMaxVendorNameLength + 1 + otbr::kMaxProductNameLength + 1];
-        snprintf(instanceName, sizeof(instanceName), "%s %s", vendorName, productName);
-        SuccessOrExit(app.GetBorderAgent().SetMeshCoPServiceValues(instanceName, productName, vendorName, {}, {}),
-                      ret = EXIT_FAILURE);
-#endif
-#endif
-#endif
-
         app.Init(restListenAddress, restListenPort);
-
-#ifndef OTBR_VENDOR_NAME
-        if (app.GetHost().GetCoprocessorType() == OT_COPROCESSOR_RCP)
-        {
-            SuccessOrExit(app.GetHost().SetVendorName(vendorName), ret = EXIT_FAILURE);
-        }
-#else
-        OT_UNUSED_VARIABLE(vendorName);
-#endif
-#ifndef OTBR_PRODUCT_NAME
-        if (app.GetHost().GetCoprocessorType() == OT_COPROCESSOR_RCP)
-        {
-            SuccessOrExit(app.GetHost().SetVendorModel(productName), ret = EXIT_FAILURE);
-        }
-#else
-        OT_UNUSED_VARIABLE(productName);
-#endif
-
 #if __linux__
         app.SetErrorCondition(errorCondition);
 #endif
@@ -465,13 +369,11 @@ void otPlatReset(otInstance *aInstance)
     gApp->Deinit();
     gApp = nullptr;
 
-#ifndef OTBR_ENABLE_PLATFORM_RESET_EXIT
+#ifndef OTBR_ENABLE_PLATFORM_ANDROID
     longjmp(sResetJump, 1);
     assert(false);
 #else
-    otbrLogNotice("Exit for platform reset!");
-
-    // Exits immediately. The system server will receive the
+    // Exits immediately on Android. The Android system_server will receive the
     // signal and decide whether (and how) to restart the ot-daemon
     exit(0);
 #endif
@@ -479,7 +381,7 @@ void otPlatReset(otInstance *aInstance)
 
 int otbr::RealMain(int argc, char *argv[])
 {
-#ifndef OTBR_ENABLE_PLATFORM_RESET_EXIT
+#ifndef OTBR_ENABLE_PLATFORM_ANDROID
     if (setjmp(sResetJump))
     {
         std::vector<char *> args = AppendAutoAttachDisableArg(argc, argv);

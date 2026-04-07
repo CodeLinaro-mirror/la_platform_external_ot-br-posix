@@ -137,6 +137,10 @@ void Application::Deinit(void)
     }
 
     mHost.Deinit();
+
+#if OTBR_ENABLE_DBUS_SERVER
+    mDBusAgent.Deinit();
+#endif
 }
 
 otbrError Application::Run(void)
